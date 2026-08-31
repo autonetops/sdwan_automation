@@ -1,0 +1,12 @@
+# Copie para terraform.tfvars (que está no .gitignore).
+#
+# As credenciais NÃO vão aqui. Elas saem do Vault por variável de ambiente:
+#
+#   export TF_VAR_vmanage_url=$(vault kv get -field=url secret/sdwan/manager)
+#   export TF_VAR_vmanage_username=$(vault kv get -field=username secret/sdwan/manager)
+#   export TF_VAR_vmanage_password=$(vault kv get -field=password secret/sdwan/manager)
+#
+# Ou use o atalho do repositório:  source ../scripts/vault-env.sh
+
+aluno       = "07"
+banner_motd = "Gerenciado por Terraform - AutoNetOps Bootcamp"

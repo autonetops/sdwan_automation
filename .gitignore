@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+
+# Retratos do fabric — dado de execução, não de repositório
+snapshots/
+*.snapshot.json
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# NUNCA comitar: token do Vault
+.vault-token
