@@ -1,19 +1,19 @@
-"""Módulo 5 — Pipeline de mudança validada (30 min)
+"""Module 5 — Validated change pipeline (30 min)
 
-Este é o capstone. Ele junta tudo:
+This is the capstone. It brings everything together:
 
-    retrato ANTES  →  aplica a mudança  →  retrato DEPOIS  →  compara
-                                                              ↓
-                                              regrediu?  →  ROLLBACK
+    snapshot BEFORE  →  apply the change  →  snapshot AFTER  →  compare
+                                                                  ↓
+                                                regressed?  →  ROLLBACK
 
-A ideia que o bootcamp inteiro serviu para construir: **mudança sem
-verificação automática não é automação, é digitação mais rápida.**
+The idea the whole bootcamp has been building toward: **a change without
+automatic verification is not automation, it is faster typing.**
 
-Rode com:   python pipeline.py --dry-run     # só os retratos, não muda nada
-            python pipeline.py               # o ciclo completo
+Run:    python pipeline.py --dry-run     # snapshots only, changes nothing
+        python pipeline.py               # the full cycle
 
-Saída: código 0 se o fabric ficou igual ou melhor, 1 se regrediu.
-É esse código de saída que o GitHub Actions usa para reprovar o PR.
+Exit code 0 if the fabric came out the same or better, 1 if it regressed.
+That exit code is what GitLab CI uses to fail the pipeline.
 """
 
 import argparse
@@ -27,102 +27,103 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sdwan_toolkit import SDWANClient, compare, take_snapshot  # noqa: E402
 from sdwan_toolkit.state import FabricSnapshot  # noqa: E402
 
-RETRATOS = Path("snapshots")
+SNAPSHOTS = Path("snapshots")
 
 
 # ─────────────────────────────────────────────────────────────────────
-# TAREFA 1 — O retrato de referência
+# TASK 1 — The reference snapshot
 # ─────────────────────────────────────────────────────────────────────
 
 def precheck(client: SDWANClient) -> FabricSnapshot:
-    """Retrato ANTES da mudança. Também é o portão de entrada.
+    """Snapshot BEFORE the change. Also the entry gate.
 
-    Se o fabric já está quebrado antes de você mexer, a mudança não deve
-    nem começar — senão você herda um problema que não era seu e não
-    consegue mais distinguir a sua regressão da que já existia.
+    If the fabric is already broken before you touch it, the change should not
+    start — otherwise you inherit a problem that wasn't yours and lose the
+    ability to tell your regression apart from the one already there.
     """
     print("── PRECHECK ──")
-    retrato = take_snapshot(client)
+    snapshot = take_snapshot(client)
 
-    # TODO 1.1: se algum device estiver `reachable=False`, avise na tela.
-    #           Decida (e justifique no README) se isso deve abortar o
-    #           pipeline. Dica: num lab compartilhado, abortar sempre é
-    #           inviável; abortar quando um EDGE ALVO está fora, não.
+    # TODO 1.1: if any device has `reachable=False`, report it on screen.
+    #           Decide (and justify in the README) whether that should abort
+    #           the pipeline. Hint: in a shared lab, always aborting is
+    #           unworkable; aborting when a TARGET EDGE is down is not.
 
-    # TODO 1.2: salve o retrato em RETRATOS / "antes.json" e devolva-o.
-    return retrato
+    # TODO 1.2: save the snapshot to SNAPSHOTS / "before.json" and return it.
+    return snapshot
 
 
 # ─────────────────────────────────────────────────────────────────────
-# TAREFA 2 — Aplicar a mudança
+# TASK 2 — Apply the change
 # ─────────────────────────────────────────────────────────────────────
 
-def aplicar() -> bool:
-    """Aplica a mudança com Terraform. Devolve True se o apply passou."""
-    # TODO 2.1: rode `terraform apply -auto-approve` dentro de ../04-terraform
-    #           usando subprocess.run. Devolva True se returncode == 0.
+def apply_change() -> bool:
+    """Apply the change with Terraform. Returns True if apply succeeded."""
+    # TODO 2.1: run `terraform apply -auto-approve` inside ../04-terraform
+    #           using subprocess.run. Return True when returncode == 0.
     #
-    #           ⚠️ Não use shell=True com string interpolada. Passe lista de
-    #              argumentos — é a diferença entre um comando e uma injeção.
+    #           ⚠️ Don't use shell=True with an interpolated string. Pass a
+    #              list of arguments — that's the difference between a command
+    #              and an injection.
     return False
 
 
 # ─────────────────────────────────────────────────────────────────────
-# TAREFA 3 — Verificar e decidir
+# TASK 3 — Verify and decide
 # ─────────────────────────────────────────────────────────────────────
 
-def postcheck(client: SDWANClient, antes: FabricSnapshot) -> bool:
-    """Retrato DEPOIS + veredito. True = seguro manter a mudança."""
+def postcheck(client: SDWANClient, before: FabricSnapshot) -> bool:
+    """Snapshot AFTER + verdict. True = safe to keep the change."""
     print("── POSTCHECK ──")
 
-    # TODO 3.1: tire o retrato depois e salve em RETRATOS / "depois.json".
+    # TODO 3.1: take the after snapshot and save it to SNAPSHOTS / "after.json".
 
-    # TODO 3.2: compare(antes, depois), imprima o .report() e devolva .ok
+    # TODO 3.2: compare(before, after), print the .report() and return .ok
     #
-    #           ⏱️ PENSE NO TEMPO: BFD e OMP não reconvergem instantaneamente.
-    #              Um postcheck imediato acusa regressão que não existe.
-    #              Quanto esperar? Justifique a sua escolha.
+    #           ⏱️ THINK ABOUT TIME: BFD and OMP do not reconverge instantly.
+    #              An immediate postcheck reports a regression that isn't real.
+    #              How long should you wait? Justify your choice.
     return False
 
 
 # ─────────────────────────────────────────────────────────────────────
-# TAREFA 4 — Desfazer
+# TASK 4 — Undo
 # ─────────────────────────────────────────────────────────────────────
 
 def rollback() -> None:
-    """Desfaz a mudança. É a parte que quase todo pipeline caseiro esquece."""
+    """Undo the change. The part almost every homegrown pipeline forgets."""
     print("── ROLLBACK ──")
-    # TODO 4.1: o Terraform guarda o estado anterior. A forma mais simples
-    #           de reverter no lab é `terraform apply` com o valor antigo da
-    #           variável, ou `terraform destroy -target=...`.
-    #           Implemente e explique no README por que escolheu essa via.
+    # TODO 4.1: Terraform keeps the previous state. The simplest way to revert
+    #           in the lab is `terraform apply` with the old variable value, or
+    #           `terraform destroy -target=...`.
+    #           Implement it and explain in the README why you chose that path.
     pass
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Pipeline de mudança validada")
+    parser = argparse.ArgumentParser(description="Validated change pipeline")
     parser.add_argument("--dry-run", action="store_true",
-                        help="tira os dois retratos sem aplicar mudança nenhuma")
+                        help="take both snapshots without applying any change")
     args = parser.parse_args()
 
-    RETRATOS.mkdir(exist_ok=True)
+    SNAPSHOTS.mkdir(exist_ok=True)
 
     with SDWANClient.from_vault() as client:
-        antes = precheck(client)
+        before = precheck(client)
 
         if args.dry_run:
-            print("\n[dry-run] Nenhuma mudança aplicada.")
-            return 0 if postcheck(client, antes) else 1
+            print("\n[dry-run] No change applied.")
+            return 0 if postcheck(client, before) else 1
 
-        if not aplicar():
-            print("Apply falhou. Nada a verificar.")
+        if not apply_change():
+            print("Apply failed. Nothing to verify.")
             return 1
 
-        if postcheck(client, antes):
-            print("\n✓ Fabric íntegro. Mudança mantida.")
+        if postcheck(client, before):
+            print("\n✓ Fabric intact. Change kept.")
             return 0
 
-        print("\n✗ Regressão detectada.")
+        print("\n✗ Regression detected.")
         rollback()
         return 1
 

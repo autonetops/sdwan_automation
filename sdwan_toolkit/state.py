@@ -1,11 +1,11 @@
-"""Coleta de estado operacional — o "antes" e o "depois" de toda mudança.
+"""Operational state collection — the "before" and "after" of every change.
 
-A ideia central do bootcamp: **uma mudança só é segura se você consegue provar
-que o fabric ficou igual ou melhor depois dela.** Para provar, você precisa de
-um retrato comparável, em formato de dado — não de um `show` colado num chat.
+The central idea of this bootcamp: **a change is only safe if you can prove
+the fabric came out the same or better.** Proving it requires a comparable
+snapshot, as data — not a `show` command pasted into a chat window.
 
-`FabricSnapshot` é esse retrato: sessões BFD, conexões de controle, peers OMP
-e SLA de app-route, por dispositivo, com timestamp.
+`FabricSnapshot` is that snapshot: BFD sessions, control connections, OMP
+peers and app-route SLA, per device, with a timestamp.
 """
 
 from __future__ import annotations
@@ -20,35 +20,35 @@ from .client import SDWANClient
 from .inventory import Device, get_devices
 
 
-# ── coletores individuais ───────────────────────────────────────────
-# Todos são real-time: consultam o equipamento pelo plano de controle.
-# São caros. É por isso que o cliente tem rate limit.
+# ── individual collectors ───────────────────────────────────────────
+# All real-time: they query the device across the control plane.
+# They are expensive. That is why the client has a rate limiter.
 
 def get_control_connections(client: SDWANClient, system_ip: str) -> list[dict[str, Any]]:
-    """Conexões de controle (DTLS/TLS) do dispositivo para os controladores."""
+    """Control connections (DTLS/TLS) from the device to the controllers."""
     return client.get("/device/control/connections", {"deviceId": system_ip}) or []
 
 
 def get_bfd_sessions(client: SDWANClient, system_ip: str) -> list[dict[str, Any]]:
-    """Sessões BFD — os túneis de dados entre TLOCs. O sinal vital do fabric."""
+    """BFD sessions — the data tunnels between TLOCs. The fabric's vital sign."""
     return client.get("/device/bfd/sessions", {"deviceId": system_ip}) or []
 
 
 def get_omp_peers(client: SDWANClient, system_ip: str) -> list[dict[str, Any]]:
-    """Peers OMP — a adjacência de roteamento com os Controllers."""
+    """OMP peers — the routing adjacency with the Controllers."""
     return client.get("/device/omp/peers", {"deviceId": system_ip}) or []
 
 
 def get_approute_stats(client: SDWANClient, system_ip: str) -> list[dict[str, Any]]:
-    """Latência/perda/jitter por túnel, como o app-route enxerga."""
+    """Latency/loss/jitter per tunnel, as app-route sees it."""
     return client.get("/device/app-route/statistics", {"deviceId": system_ip}) or []
 
 
-# ── o retrato ───────────────────────────────────────────────────────
+# ── the snapshot ────────────────────────────────────────────────────
 
 @dataclass
 class DeviceState:
-    """Estado operacional de um dispositivo, reduzido ao que importa comparar."""
+    """One device's operational state, reduced to what is worth comparing."""
 
     system_ip: str
     hostname: str
@@ -72,7 +72,7 @@ class DeviceState:
 
 @dataclass
 class FabricSnapshot:
-    """Retrato do fabric num instante. Serializável, comparável, versionável."""
+    """The fabric at one instant. Serializable, comparable, versionable."""
 
     taken_at: str
     devices: dict[str, DeviceState] = field(default_factory=dict)
@@ -110,10 +110,11 @@ class FabricSnapshot:
 
 
 def _count_up(rows: list[dict[str, Any]], *keys: str) -> int:
-    """Conta linhas cujo campo de estado diz 'up'.
+    """Count rows whose state field says 'up'.
 
-    A API não é consistente: umas vezes o campo é `state`, outras `status`,
-    outras `operstate`. Em vez de adivinhar, olhamos todos os candidatos.
+    The API is not consistent: sometimes the field is `state`, sometimes
+    `status`, sometimes `operstate`. Rather than guessing, we check every
+    candidate.
     """
     total = 0
     for row in rows:
@@ -126,14 +127,14 @@ def _count_up(rows: list[dict[str, Any]], *keys: str) -> int:
 
 
 def collect_device_state(client: SDWANClient, device: Device) -> DeviceState:
-    """Coleta o estado de um dispositivo. Não levanta erro se ele estiver fora."""
+    """Collect one device's state. Does not raise if the device is down."""
     state = DeviceState(
         system_ip=device.system_ip,
         hostname=device.hostname,
         reachable=device.is_reachable,
     )
     if not device.is_reachable:
-        # Consultar um device inalcançável só gasta tempo e timeout.
+        # Querying an unreachable device only burns time and timeouts.
         return state
 
     control = get_control_connections(client, device.system_ip)
@@ -153,7 +154,7 @@ def collect_device_state(client: SDWANClient, device: Device) -> DeviceState:
 
 
 def take_snapshot(client: SDWANClient, devices: list[Device] | None = None) -> FabricSnapshot:
-    """Retrato completo do fabric. É a função que o pipeline chama duas vezes."""
+    """A full snapshot of the fabric. The pipeline calls this twice."""
     devices = devices if devices is not None else get_devices(client)
     snapshot = FabricSnapshot(taken_at=datetime.now(timezone.utc).isoformat())
     for device in devices:

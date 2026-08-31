@@ -1,109 +1,120 @@
-# Bootcamp de Automação — Cisco Catalyst SD-WAN
+# Cisco Catalyst SD-WAN — Automation Bootcamp
 
-Quatro horas para quem **já domina SD-WAN e está aprendendo automação**.
+Four hours for engineers who **already know SD-WAN and are learning automation**.
 
-Aqui não se ensina o que é TLOC, OMP ou config group — presume-se que você
-sabe. Ensina-se automação usando esses objetos como vocabulário. A frase que
-resume o dia:
+Nobody here will explain what a TLOC, OMP or config group is — you know that
+already. What you'll learn is automation, using those objects as the
+vocabulary. The sentence that sums up the day:
 
-> Você já sabe o que é um config group. Hoje você aprende como ele é em JSON
-> na rede — e por que isso muda o que dá para fazer com ele.
+> You already know what a config group is. Today you learn what it looks like
+> as JSON on the wire — and why that changes what you can do with it.
 
-## O arco
+## The arc
 
-Você não faz cinco exercícios soltos. Você constrói **uma ferramenta**, camada
-por camada, e sai com ela funcionando.
+You don't do five disconnected exercises. You build **one tool**, layer by
+layer, and you leave with it working.
 
-| Módulo | Tempo | Automação | SD-WAN |
+| Module | Time | Automation | SD-WAN |
 |---|---|---|---|
-| [01 — Conectando ao Manager](01-conectando-ao-manager/) | 45 min | Sessões HTTP, segredo fora do código | Handshake `j_security_check` + `X-XSRF-TOKEN` |
-| [02 — Estado como dado](02-estado-operacional/) | 50 min | Modelagem, snapshot, diff | Control connections, BFD, OMP, app-route |
-| [03 — Config Groups](03-config-groups/) | 50 min | Idempotência, tarefa assíncrona, dry-run | Feature profiles, parcels, deploy |
-| [04 — Terraform](04-terraform/) | 45 min | Declarativo, state, drift | Config group como código |
-| [05 — Pipeline](05-pipeline/) | 30 min | CI/CD, verificação, rollback | Precheck/postcheck do fabric |
+| [01 — Connecting to the Manager](01-connecting-to-manager/) | 45 min | HTTP sessions, secrets out of code | `j_security_check` + `X-XSRF-TOKEN` handshake |
+| [02 — State as data](02-operational-state/) | 50 min | Modelling, snapshots, diffing | Control connections, BFD, OMP, app-route |
+| [03 — Config Groups](03-config-groups/) | 50 min | Idempotency, async tasks, dry-run | Feature profiles, parcels, deploy |
+| [04 — Terraform](04-terraform/) | 45 min | Declarative, state, drift | Config group as code |
+| [05 — Pipeline](05-pipeline/) | 30 min | CI/CD, verification, rollback | Fabric pre/post checks |
 
-Sobram 20 minutos para abertura, intervalo e o fechamento. É de propósito.
+The remaining 20 minutes are for the opening, a break and the wrap-up. That's
+deliberate.
 
-## Antes de começar
+## Before you start
 
 ```bash
-git clone https://github.com/autonetops/sdwan_automation.git
+git clone <this-repo>
 cd sdwan_automation
 
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# A suíte offline tem que passar ANTES de você tocar no lab.
+# The offline suite must pass BEFORE you touch the lab.
 python -m pytest -q
 ```
 
-### Credenciais
+### Credentials
 
-Elas vivem no **HashiCorp Vault** (`https://vault.autonetops.com`), nunca no
-repositório. Você recebe um token de leitura no início do bootcamp.
+They live in **HashiCorp Vault** (`https://vault.autonetops.com`), never in the
+repository. You get a read-only token at the start of the bootcamp.
 
 ```bash
 export VAULT_ADDR=https://vault.autonetops.com
-export VAULT_TOKEN=hvs.xxxxxxxx      # entregue pelo instrutor
-export WS_ALUNO=07                   # o seu número — vira prefixo dos objetos
+export VAULT_TOKEN=hvs.xxxxxxxx     # handed out by the instructor
+export WS_STUDENT=07                # your number — prefixes everything you create
 
-source scripts/vault-env.sh          # exporta VMANAGE_* e TF_VAR_*
+source scripts/vault-env.sh         # exports VMANAGE_* and TF_VAR_*
 ```
 
-O segredo fica em `secret/sdwan/manager` com as chaves `url`, `username` e
-`password`. Todo o código lê por uma função só: `sdwan_toolkit.vault.load_credentials()`.
+The secret lives at `secret/sdwan/manager` with the keys `url`, `username` and
+`password`. All the code reads it through one function:
+`sdwan_toolkit.vault.load_credentials()`.
 
-> **Por que Vault e não um `.env`?** Porque o `.env` de hoje é o commit
-> acidental de amanhã. E porque revogar um token é instantâneo; trocar uma
-> senha que dezoito pessoas copiaram, não.
+> **Why Vault and not a `.env`?** Because today's `.env` is tomorrow's
+> accidental commit. And because revoking a token is instant, while changing a
+> password that eighteen people copied is not.
 
-## O lab é compartilhado
+## The lab is shared
 
-Um Manager para a turma inteira. Duas regras que não são burocracia:
+One Manager for the whole class. Two rules that aren't bureaucracy:
 
-1. **Tudo que você criar leva o prefixo `ws<NN>-`** (o seu `WS_ALUNO`). Sem
-   isso vocês sobrescrevem o trabalho uns dos outros.
-2. **Não tire o rate limit do cliente.** Endpoints `/device/*` são real-time:
-   o Manager consulta o equipamento pelo plano de controle. Vinte pessoas em
-   laço fechado transformam a aula num incidente. O `RateLimiter` em
-   `sdwan_toolkit/client.py` existe por isso.
+1. **Everything you create carries the `ws<NN>-` prefix** (your `WS_STUDENT`).
+   Without it you overwrite each other's work.
+2. **Don't remove the client's rate limiter.** `/device/*` endpoints are
+   real-time: the Manager queries the device across the control plane. Twenty
+   people in a tight loop turn the class into an incident. The `RateLimiter`
+   in `sdwan_toolkit/client.py` exists for that reason.
 
-## Como estudar depois
+## Studying afterwards
 
-Cada módulo tem `exercicio.py` com TODOs e uma pasta `solution/` com a versão
-pronta e comentada. Compare — mas só depois de tentar.
+Every module has an `exercise.py` with TODOs and a `solution/` folder with the
+finished, annotated version. Compare them — but only after you've tried.
 
-A suíte de testes roda **sem lab nenhum**, contra um Manager de mentira em
-`tests/conftest.py`. É assim que você continua praticando na semana seguinte,
-no avião, sem VPN.
+The test suite runs **with no lab at all**, against a fake Manager in
+`tests/conftest.py`. That's how you keep practising the following week, on a
+plane, with no VPN.
 
 ```bash
-python -m pytest -q                        # tudo
-python -m pytest tests/test_diff.py -q     # só o juiz da mudança
+python -m pytest -q                      # everything
+python -m pytest tests/test_diff.py -q   # just the judge of the change
 ```
 
-## O toolkit
+## The toolkit
 
 ```
 sdwan_toolkit/
-├── vault.py        credenciais (módulo 1)
-├── client.py       sessão autenticada + rate limit (módulo 1)
-├── inventory.py    quem é quem no fabric (módulo 1)
-├── state.py        retrato operacional (módulo 2)
-├── diff.py         o juiz da mudança (módulo 2)
-├── tasks.py        polling de tarefa assíncrona (módulo 3)
-└── configgroup.py  mudança declarativa (módulo 3)
+├── vault.py        credentials (module 1)
+├── client.py       authenticated session + rate limiting (module 1)
+├── inventory.py    who is who in the fabric (module 1)
+├── state.py        operational snapshot (module 2)
+├── diff.py         the judge of the change (module 2)
+├── tasks.py        asynchronous task polling (module 3)
+└── configgroup.py  declarative change (module 3)
 ```
 
-## O que ficou de fora
+## CI/CD
 
-Consciente, por causa das quatro horas: automação orientada a eventos
-(webhooks de alarme), a query DSL de estatísticas agregadas, onboarding
-ZTP/PnP e vManage multi-tenant. Todos valem — nenhum cabe. Ficam como o
-próximo passo.
+The repo ships both pipelines, so it works on whichever forge you import it
+into:
+
+- `.gitlab-ci.yml` — three stages (test → plan → apply). MRs get the offline
+  tests and a `terraform plan`; the apply is default-branch-only and **manual**.
+  Requires one masked, protected CI/CD variable: `VAULT_TOKEN`.
+- `.github/workflows/change-validation.yml` — the same shape with GitHub
+  Actions, gated by a `fabric-lab` environment.
+
+## What was left out
+
+Deliberately, because of the four hours: event-driven automation (alarm
+webhooks), the aggregated statistics query DSL, ZTP/PnP onboarding and
+multi-tenant vManage. All worthwhile — none of them fit. They're the next step.
 
 ---
 
-Feito por [AutoNetOps](https://autonetops.com). Para a versão de
-**configuração** (não automação) de SD-WAN, veja o workbook prático na
-plataforma.
+Built by [AutoNetOps](https://autonetops.com). For the **configuration** (not
+automation) side of SD-WAN, see the practical workbook on the platform.

@@ -1,34 +1,34 @@
-# Módulo 3 — Config Groups e o modelo assíncrono (50 min)
+# Module 3 — Config Groups and the asynchronous model (50 min)
 
-Aqui você escreve no fabric pela primeira vez.
+This is where you write to the fabric for the first time.
 
-## O mapa mental, vindo de templates
+## The mental map, coming from templates
 
-| Você conhece | Agora se chama |
+| What you know | What it's called now |
 |---|---|
-| Feature template | **Parcel** (dentro de um feature profile) |
+| Feature template | **Parcel** (inside a feature profile) |
 | Device template | **Config group** |
 | Attach | **Associate** + **deploy** |
-| CSV de variáveis | **Device variables** |
+| Variable CSV | **Device variables** |
 
-Config groups exigem Manager 20.12+ / IOS-XE 17.12+. Templates clássicos
-continuam existindo e continuam sendo a realidade da maioria dos fabrics
-brownfield — o `attachfeature` é o equivalente do deploy, e o modelo de tarefa
-assíncrona é **idêntico** nos dois. O que você aprende aqui vale para os dois
-mundos.
+Config groups require Manager 20.12+ / IOS-XE 17.12+. Classic templates still
+exist and are still the reality of most brownfield fabrics — `attachfeature` is
+the deploy equivalent, and the asynchronous task model is **identical** in both.
+What you learn here applies to both worlds.
 
-## O que vamos aprender
+## What we're learning
 
-| Automação | SD-WAN |
+| Automation | SD-WAN |
 |---|---|
-| Dry-run antes de escrever | `preview` do config group |
-| Modelo assíncrono e polling | `parentTaskId` → `/device/action/status/{id}` |
-| Idempotência | Associate que não reassocia |
-| GET → modificar → PUT | Device variables |
+| Dry-run before writing | Config group `preview` |
+| The async model and polling | `parentTaskId` → `/device/action/status/{id}` |
+| Idempotency | An associate that doesn't re-associate |
+| GET → modify → PUT | Device variables |
 
-## A lição que importa
+## The lesson that matters
 
-Escrever no Manager **não é síncrono**. O POST devolve um `id` e vai embora:
+Writing to the Manager is **not synchronous**. The POST returns an `id` and
+walks away:
 
 ```
 POST /v1/config-group/{id}/device/deploy   →  {"parentTaskId": "abc-123"}
@@ -36,34 +36,34 @@ POST /v1/config-group/{id}/device/deploy   →  {"parentTaskId": "abc-123"}
 GET /device/action/status/abc-123  ← polling ──────────┘
 ```
 
-Script que não espera **mente**. Ele reporta sucesso quando tudo que houve foi
-o Manager aceitar o pedido — antes de o fabric ter mudado, ou antes de ter
-falhado.
+A script that doesn't wait **lies**. It reports success when all that happened
+was the Manager accepting the request — before the fabric changed, or before it
+failed.
 
-Esperar direito são quatro coisas: intervalo entre consultas, timeout
-realista, distinguir "terminou bem" de "terminou mal", e devolver contexto
-suficiente para alguém debugar às 3 da manhã.
+Waiting properly is four things: an interval between polls, a realistic
+timeout, telling "finished well" from "finished badly", and returning enough
+context for someone to debug at 3am.
 
-## Preview: o `terraform plan` que quase ninguém usa
+## Preview: the `terraform plan` almost nobody uses
 
-`preview_device_config()` devolve a CLI que **seria** aplicada, sem aplicar.
-É grátis, é seguro, e é a única resposta honesta para "o que exatamente vai
-mudar?". Use sempre.
+`preview_device_config()` returns the CLI that **would** be applied, without
+applying it. It's free, it's safe, and it's the only honest answer to "what
+exactly is going to change?". Use it every time.
 
-## Mãos à obra
+## Get to work
 
 ```bash
-export WS_ALUNO=07
-python exercicio.py --listar     # ache o seu config group
-python exercicio.py --preview    # veja antes de fazer
-python exercicio.py --deploy     # faça, e espere terminar
+export WS_STUDENT=07
+python exercise.py --list      # find your config group
+python exercise.py --preview   # look before you leap
+python exercise.py --deploy    # do it, and wait for it
 ```
 
-Enquanto o deploy roda, abra a GUI em **Monitor → Tasks**. É a mesma tarefa
-que o seu código está consultando. Esse é o momento em que a API deixa de ser
-abstrata.
+While the deployment runs, open the GUI under **Monitor → Tasks**. That's the
+same task your code is polling. This is the moment the API stops being
+abstract.
 
-Confira o polling sem lab:
+Check the polling without the lab:
 
 ```bash
 python -m pytest ../tests/test_tasks.py -q
@@ -71,11 +71,11 @@ python -m pytest ../tests/test_tasks.py -q
 
 ## Namespace
 
-O lab é compartilhado. Tudo que você criar leva `ws<NN>-`. O código levanta
-`SystemExit` se `WS_ALUNO` não estiver definido — de propósito.
+The lab is shared. Everything you create carries `ws<NN>-`. The code raises
+`SystemExit` if `WS_STUDENT` isn't set — on purpose.
 
-## Quando um payload der 400
+## When a payload returns 400
 
-Não adivinhe. Abra as Ferramentas de Desenvolvedor do navegador, faça a mesma
-ação clicando na GUI e compare o corpo da requisição. A GUI usa exatamente a
-mesma API que você. **Isso é a técnica, não a gambiarra.**
+Don't guess. Open the browser Developer Tools, perform the same action by
+clicking in the GUI, and compare the request body. The GUI uses exactly the
+same API you do. **That's the technique, not a workaround.**

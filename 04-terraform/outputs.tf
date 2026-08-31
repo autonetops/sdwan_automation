@@ -1,13 +1,13 @@
 output "config_group_id" {
-  description = "Use este id no exercício do módulo 5."
+  description = "Use this id in the module 5 exercise."
   value       = sdwan_configuration_group.bootcamp.id
 }
 
-output "edges_descobertos" {
-  description = "Dispositivos alcançáveis que o data source encontrou — sem UUID hardcoded."
-  value       = [for d in local.edges_alcancaveis : d.hostname]
+output "discovered_devices" {
+  description = "Reachable devices the data source found — no hardcoded UUIDs."
+  value       = [for d in local.reachable_devices : d.hostname]
 }
 
-output "prefixo" {
-  value = local.prefixo
+output "prefix" {
+  value = local.prefix
 }

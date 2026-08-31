@@ -1,16 +1,16 @@
-"""Inventário do fabric.
+"""Fabric inventory.
 
-Lição de modelagem: o Manager tem *duas* visões de inventário e elas não são
-intercambiáveis.
+Modelling lesson: the Manager has *two* views of inventory and they are not
+interchangeable.
 
-- `/dataservice/device` é **real-time**: o Manager responde sobre quem está
-  conectado ao plano de controle agora. Tem `reachability`, não tem quem está
-  cadastrado mas nunca subiu.
-- `/dataservice/system/device/{vedges,controllers}` é o **banco de configuração**:
-  tudo que foi cadastrado, incluindo o que está offline. Tem `validity`
-  (estado do certificado), não tem estado operacional.
+- `/dataservice/device` is **real-time**: the Manager answers about who is
+  connected to the control plane right now. It has `reachability`; it does not
+  have devices that are registered but never came up.
+- `/dataservice/system/device/{vedges,controllers}` is the **configuration
+  database**: everything registered, including what is offline. It has
+  `validity` (certificate state) but no operational state.
 
-Automação madura sabe qual das duas está perguntando.
+Mature automation knows which of the two it is asking.
 """
 
 from __future__ import annotations
@@ -25,12 +25,12 @@ CONTROLLER_PERSONALITIES = {"vmanage", "vsmart", "vbond"}
 
 @dataclass
 class Device:
-    """Um nó do fabric, normalizado.
+    """A fabric node, normalized.
 
-    A API devolve chaves com hífen (`host-name`, `system-ip`) e valores
-    inconsistentes entre endpoints. Normalizar na borda — assim que o dado
-    entra — evita espalhar `d.get("host-name") or d.get("hostName")` pelo
-    código inteiro.
+    The API returns hyphenated keys (`host-name`, `system-ip`) and values that
+    are inconsistent between endpoints. Normalizing at the edge — the moment
+    data comes in — keeps `d.get("host-name") or d.get("hostName")` from
+    spreading through the whole codebase.
     """
 
     system_ip: str
@@ -76,12 +76,12 @@ class Device:
 
 
 def get_devices(client: SDWANClient) -> list[Device]:
-    """Todos os dispositivos vistos pelo plano de controle (visão real-time)."""
+    """Every device seen by the control plane (the real-time view)."""
     return [Device.from_api(d) for d in client.get("/device") or []]
 
 
 def get_edges(client: SDWANClient) -> list[Device]:
-    """Só os WAN Edges — é neles que a automação de configuração atua."""
+    """WAN Edges only — these are what configuration automation acts on."""
     return [d for d in get_devices(client) if d.is_edge]
 
 
@@ -95,5 +95,5 @@ def find_by_hostname(devices: Iterable[Device], hostname: str) -> Device | None:
 
 
 def unreachable(devices: Iterable[Device]) -> list[Device]:
-    """Atalho para o check mais comum de pré-mudança."""
+    """Shortcut for the most common pre-change check."""
     return [d for d in devices if not d.is_reachable]

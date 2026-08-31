@@ -1,67 +1,66 @@
 # ─────────────────────────────────────────────────────────────────────
-# Módulo 4 — a mesma mudança do módulo 3, agora declarativa
+# Module 4 — the same change as module 3, now declarative
 #
-# No módulo 3 você escreveu o "como": faça POST, pegue o id, faça polling,
-# trate a falha. Aqui você escreve só o "o quê", e o provider cuida do resto.
+# In module 3 you wrote the "how": POST, grab the id, poll, handle failure.
+# Here you write only the "what", and the provider handles the rest.
 #
-# O ponto da aula NÃO é que Terraform é melhor. É que ele só é utilizável
-# por quem entende o que ele está escondendo — que é exatamente o que você
-# implementou na mão uma hora atrás.
+# The point of this lesson is NOT that Terraform is better. It is that
+# Terraform is only usable by someone who understands what it is hiding —
+# which is exactly what you implemented by hand an hour ago.
 # ─────────────────────────────────────────────────────────────────────
 
 locals {
-  prefixo = "ws${var.aluno}-"
+  prefix = "ws${var.student}-"
 }
 
-# ── Descoberta ──────────────────────────────────────────────────────
-# Data source em vez de UUID hardcoded.
-data "sdwan_device" "todos" {}
+# ── Discovery ───────────────────────────────────────────────────────
+# A data source instead of hardcoded UUIDs.
+data "sdwan_device" "all" {}
 
 locals {
-  # LIÇÃO IMPORTANTE: repare no que NÃO existe aqui.
+  # IMPORTANT LESSON: notice what is NOT here.
   #
-  # O data source expõe device_id, hostname, reachability, serial_number,
-  # site_id, state, status e uuid — e mais nada. Não há `personality`. Ou
-  # seja: pelo Terraform você não consegue separar edge de controlador,
-  # coisa que o `/dataservice/device` da API entrega de graça.
+  # The data source exposes device_id, hostname, reachability, serial_number,
+  # site_id, state, status and uuid — and nothing else. There is no
+  # `personality`. Which means: through Terraform you cannot tell an edge from
+  # a controller, something `/dataservice/device` gives you for free.
   #
-  # É por isso que o toolkit em Python não vira lixo quando você adota
-  # Terraform. O provider cobre o caminho declarativo; a API cobre o resto.
-  # Ferramenta boa é a que você sabe quando NÃO usar.
-  edges_alcancaveis = [
-    for d in data.sdwan_device.todos.devices : d
+  # That is why the Python toolkit does not become junk when you adopt
+  # Terraform. The provider covers the declarative path; the API covers the
+  # rest. A good tool is one you know when NOT to use.
+  reachable_devices = [
+    for d in data.sdwan_device.all.devices : d
     if d.reachability == "reachable"
   ]
 }
 
-# ── PASSO 1 ────────────────────────────────────────────────────────
-# Feature profile de sistema: o contêiner dos parcels.
+# ── STEP 1 ──────────────────────────────────────────────────────────
+# A system feature profile to hold the banner parcel.
 resource "sdwan_system_feature_profile" "bootcamp" {
-  name        = "${local.prefixo}system-profile"
-  description = "Feature profile de sistema criado no bootcamp de automação"
+  name        = "${local.prefix}system-profile"
+  description = "System feature profile created in the automation bootcamp"
 }
 
-# ── PASSO 2 ────────────────────────────────────────────────────────
-# O banner — a mudança que vai aparecer no plan e no fabric.
+# ── STEP 2 ──────────────────────────────────────────────────────────
+# The banner. This is the change that shows up in the plan and in the fabric.
 #
-# O atributo do MOTD chama-se `motd`, não `message_of_the_day`. Descoberto
-# com `terraform providers schema -json` — e é assim que se resolve qualquer
-# dúvida de atributo, em qualquer provider, sem depender da documentação
-# estar atualizada.
+# The MOTD attribute is called `motd`, not `message_of_the_day`. Found with
+# `terraform providers schema -json` — and that is how you settle any attribute
+# question, in any provider, without depending on the docs being current.
 resource "sdwan_system_banner_feature" "motd" {
-  name               = "${local.prefixo}banner"
-  description        = "MOTD gerenciado por Terraform"
+  name               = "${local.prefix}banner"
+  description        = "MOTD managed by Terraform"
   feature_profile_id = sdwan_system_feature_profile.bootcamp.id
   login              = var.banner_motd
 
   motd = var.banner_motd
 }
 
-# ── PASSO 3 ────────────────────────────────────────────────────────
-# O config group que amarra o profile.
+# ── STEP 3 ──────────────────────────────────────────────────────────
+# The config group that ties the profile together.
 resource "sdwan_configuration_group" "bootcamp" {
-  name        = "${local.prefixo}config-group"
-  description = "Config group do bootcamp de automação"
+  name        = "${local.prefix}config-group"
+  description = "Config group for the automation bootcamp"
   solution    = "sdwan"
 
   feature_profile_ids = [

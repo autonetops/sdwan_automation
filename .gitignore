@@ -19,3 +19,4 @@ crash.log
 
 # NUNCA comitar: token do Vault
 .vault-token
+.pytest_cache/

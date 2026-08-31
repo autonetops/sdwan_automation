@@ -1,4 +1,4 @@
-"""O aperto de mão com o Manager — incluindo a armadilha do HTTP 200."""
+"""The handshake with the Manager — including the HTTP 200 trap."""
 
 import pytest
 import responses
@@ -21,7 +21,7 @@ def _mock_login_ok():
 
 
 @responses.activate
-def test_login_guarda_cookie_e_token(credentials):
+def test_login_stores_cookie_and_token(credentials):
     _mock_login_ok()
     client = SDWANClient(credentials).login()
     assert "JSESSIONID" in client.session.cookies
@@ -29,16 +29,16 @@ def test_login_guarda_cookie_e_token(credentials):
 
 
 @responses.activate
-def test_credencial_errada_devolve_200_com_html(credentials):
-    """A armadilha clássica: o Manager não devolve 401, devolve a tela de login."""
+def test_bad_credentials_return_200_with_html(credentials):
+    """The classic trap: the Manager returns the login page, not a 401."""
     responses.add(responses.POST, f"{BASE_URL}/j_security_check",
                   body=LOGIN_HTML, status=200)
-    with pytest.raises(AuthenticationError, match="página de login"):
+    with pytest.raises(AuthenticationError, match="login page"):
         SDWANClient(credentials).login()
 
 
 @responses.activate
-def test_get_desembrulha_o_envelope_data(credentials, device_payload):
+def test_get_unwraps_the_data_envelope(credentials, device_payload):
     _mock_login_ok()
     responses.add(responses.GET, f"{BASE_URL}/dataservice/device",
                   json={"header": {}, "data": device_payload}, status=200)
@@ -47,7 +47,7 @@ def test_get_desembrulha_o_envelope_data(credentials, device_payload):
 
 
 @responses.activate
-def test_prefixo_dataservice_e_opcional(credentials):
+def test_the_dataservice_prefix_is_optional(credentials):
     _mock_login_ok()
     responses.add(responses.GET, f"{BASE_URL}/dataservice/device/counters",
                   json={"data": [{"ok": True}]}, status=200)
@@ -56,25 +56,25 @@ def test_prefixo_dataservice_e_opcional(credentials):
 
 
 @responses.activate
-def test_erro_http_vira_excecao_com_contexto(credentials):
+def test_http_errors_become_exceptions_with_context(credentials):
     _mock_login_ok()
     responses.add(responses.GET, f"{BASE_URL}/dataservice/device",
-                  json={"error": {"message": "sem permissão"}}, status=500)
+                  json={"error": {"message": "forbidden"}}, status=500)
     client = SDWANClient(credentials, min_interval=0).login()
     with pytest.raises(SDWANError, match="HTTP 500"):
         client.get("/device")
 
 
 @responses.activate
-def test_xsrf_expirado_tem_mensagem_propria(credentials):
+def test_an_expired_xsrf_token_gets_its_own_message(credentials):
     _mock_login_ok()
     responses.add(responses.POST, f"{BASE_URL}/dataservice/device/action/deploy",
                   body="Invalid XSRF token", status=403)
     client = SDWANClient(credentials, min_interval=0).login()
-    with pytest.raises(SDWANError, match="X-XSRF-TOKEN expirou"):
+    with pytest.raises(SDWANError, match="X-XSRF-TOKEN expired"):
         client.post("/device/action/deploy", {})
 
 
-def test_repr_nao_vaza_senha(credentials):
-    assert "s3nh4" not in repr(credentials)
+def test_repr_does_not_leak_the_password(credentials):
+    assert "s3cr3t" not in repr(credentials)
     assert "***" in repr(credentials)

@@ -1,20 +1,20 @@
-"""Config Groups — o modelo de configuração da era UX 2.0.
+"""Config Groups — the configuration model of the UX 2.0 era.
 
-Se você vem de feature templates + device templates, o mapa mental é:
+If you come from feature templates + device templates, the mental map is:
 
-    feature template   →  parcel (dentro de um feature profile)
+    feature template   →  parcel (inside a feature profile)
     device template    →  config group
     attach             →  associate + deploy
-    variáveis do CSV   →  device variables
+    variable CSV       →  device variables
 
-A diferença que importa para automação: config group é **hierárquico e
-declarativo**. Você descreve o grupo, associa dispositivos, preenche
-variáveis e manda fazer deploy. O Manager calcula o diff e empurra.
+The difference that matters for automation: a config group is **hierarchical
+and declarative**. You describe the group, associate devices, fill in
+variables and ask for a deployment. The Manager computes the diff and pushes.
 
-⚠️ Versão: config groups exigem Manager 20.12+ / IOS-XE 17.12+. O formato
-exato de alguns payloads mudou entre releases — se um POST vier com 400,
-abra as Ferramentas de Desenvolvedor na GUI, faça a mesma ação clicando e
-compare o corpo da requisição. Essa é a técnica, não a gambiarra.
+⚠️ Version: config groups require Manager 20.12+ / IOS-XE 17.12+. The exact
+shape of some payloads changed between releases — if a POST comes back 400,
+open the browser Developer Tools, perform the same action by clicking in the
+GUI, and compare the request body. That is the technique, not a workaround.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def find_config_group(client: SDWANClient, name: str) -> ConfigGroup | None:
 
 
 def get_associated_devices(client: SDWANClient, group_id: str) -> list[dict[str, Any]]:
-    """Dispositivos já associados ao grupo."""
+    """Devices already associated with the group."""
     payload = client.get(f"/v1/config-group/{group_id}/device/associate") or []
     if isinstance(payload, dict):
         payload = payload.get("devices", [])
@@ -67,44 +67,45 @@ def get_associated_devices(client: SDWANClient, group_id: str) -> list[dict[str,
 def associate_devices(
     client: SDWANClient, group_id: str, device_uuids: list[str]
 ) -> None:
-    """Associa dispositivos ao grupo.
+    """Associate devices with the group.
 
-    Idempotência: a API não reclama de reassociar, mas nós filtramos o que já
-    está lá. Reenviar a lista inteira em alguns releases *substitui* a
-    associação — e desassociar um dispositivo por engano é exatamente o tipo
-    de acidente que a automação deveria impedir.
+    Idempotency: the API doesn't complain about re-associating, but we filter
+    out what is already there. On some releases, re-sending the whole list
+    *replaces* the association — and un-associating a device by accident is
+    exactly the kind of mishap automation is supposed to prevent.
     """
     already = {d.get("id") for d in get_associated_devices(client, group_id)}
-    novos = [uuid for uuid in device_uuids if uuid not in already]
-    if not novos:
+    new = [uuid for uuid in device_uuids if uuid not in already]
+    if not new:
         return
     client.post(
         f"/v1/config-group/{group_id}/device/associate",
-        {"devices": [{"id": uuid} for uuid in novos]},
+        {"devices": [{"id": uuid} for uuid in new]},
     )
 
 
 def get_device_variables(client: SDWANClient, group_id: str) -> dict[str, Any]:
-    """Variáveis por dispositivo — o equivalente ao CSV do device template."""
+    """Per-device variables — the equivalent of the device template CSV."""
     return client.get(f"/v1/config-group/{group_id}/device/variables") or {}
 
 
 def set_device_variables(
     client: SDWANClient, group_id: str, payload: dict[str, Any]
 ) -> None:
-    """Grava as variáveis. Faça GET, altere, PUT — nunca monte do zero.
+    """Write the variables. GET, modify, PUT — never build from scratch.
 
-    O payload traz campos internos que o Manager espera de volta intactos.
-    Reconstruir à mão é como fazer `write erase` para mudar um hostname.
+    The payload carries internal fields the Manager expects back untouched.
+    Rebuilding it by hand is like doing `write erase` to change a hostname.
     """
     client.put(f"/v1/config-group/{group_id}/device/variables", payload)
 
 
 def preview_device_config(client: SDWANClient, group_id: str, device_uuid: str) -> str:
-    """CLI que *seria* aplicada, sem aplicar. O `terraform plan` dos pobres.
+    """The CLI that *would* be applied, without applying it. A poor man's plan.
 
-    Use isto antes de todo deploy. É grátis, é seguro, e é a única forma de
-    responder "o que exatamente vai mudar?" antes de descobrir na marra.
+    Use this before every deployment. It's free, it's safe, and it's the only
+    way to answer "what exactly is going to change?" before finding out the
+    hard way.
     """
     result = client.get(f"/v1/config-group/{group_id}/device/{device_uuid}/preview")
     if isinstance(result, dict):
@@ -121,9 +122,9 @@ def deploy(
     timeout: int = 900,
     raise_on_failure: bool = True,
 ) -> TaskResult | str:
-    """Dispara o deploy e (por padrão) espera terminar.
+    """Trigger the deployment and (by default) wait for it to finish.
 
-    Devolve o `TaskResult` quando `wait=True`, ou o id da tarefa quando False.
+    Returns the `TaskResult` when `wait=True`, or the task id when False.
     """
     response = client.post(
         f"/v1/config-group/{group_id}/device/deploy",
@@ -134,7 +135,7 @@ def deploy(
     if isinstance(response, dict):
         task_id = response.get("parentTaskId") or response.get("id")
     if not task_id:
-        raise RuntimeError(f"Deploy não devolveu id de tarefa. Resposta: {response!r}")
+        raise RuntimeError(f"Deployment returned no task id. Response: {response!r}")
 
     if not wait:
         return task_id

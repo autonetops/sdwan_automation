@@ -1,0 +1,168 @@
+# ─────────────────────────────────────────────────────────────────────
+# Validated change pipeline for the Catalyst SD-WAN fabric
+#
+# The module 5 exercise, running for real.
+#
+# Note the shape: merge requests only get offline tests + `terraform plan`
+# (safe, runs on any MR). The apply — with verification and rollback — only
+# happens on the default branch, and it is MANUAL. Good automation is not the
+# kind that applies fastest. It is the kind that errs toward the safe side.
+#
+# Required CI/CD variable (Settings → CI/CD → Variables):
+#   VAULT_TOKEN   masked + protected. Everything else comes from Vault.
+#
+# Nothing else is stored in GitLab. That is the whole point: one secret to
+# rotate, one secret to revoke.
+# ─────────────────────────────────────────────────────────────────────
+
+stages:
+  - test
+  - plan
+  - apply
+
+variables:
+  VAULT_ADDR: "https://vault.autonetops.com"
+  VAULT_SDWAN_MOUNT: "secret"
+  VAULT_SDWAN_PATH: "sdwan/manager"
+  TERRAFORM_VERSION: "1.9.8"
+  TF_IN_AUTOMATION: "true"
+  # The student number used by the pipeline's own config group.
+  WS_STUDENT: "00"
+
+default:
+  image: python:3.12-slim
+  tags:
+    - docker
+
+# ── reusable fragments ──────────────────────────────────────────────
+
+.install_terraform: &install_terraform
+  - apt-get update -qq && apt-get install -y -qq curl unzip jq >/dev/null
+  - curl -sSL -o /tmp/tf.zip
+    "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+  - unzip -o -q /tmp/tf.zip -d /usr/local/bin
+  - terraform version
+
+# Pull the Manager credentials out of Vault and into the job environment.
+#
+# We use the HTTP API with curl rather than the Vault CLI so the job image
+# stays small. `secret/data/...` is the KV v2 read path — KV v1 would be
+# `secret/...` with no `/data`. Getting this wrong is the most common Vault
+# mistake, so it is worth reading twice.
+.load_vault_credentials: &load_vault_credentials
+  - |
+    if [ -z "${VAULT_TOKEN:-}" ]; then
+      echo "VAULT_TOKEN is not set. Add it as a masked, protected CI/CD variable." >&2
+      exit 1
+    fi
+    _secret=$(curl -sS --fail \
+      --header "X-Vault-Token: ${VAULT_TOKEN}" \
+      "${VAULT_ADDR}/v1/${VAULT_SDWAN_MOUNT}/data/${VAULT_SDWAN_PATH}") || {
+        echo "Vault rejected the read. Token expired, or the policy is missing this path." >&2
+        exit 1
+      }
+    export VMANAGE_URL=$(echo "$_secret" | jq -r '.data.data.url')
+    export VMANAGE_USERNAME=$(echo "$_secret" | jq -r '.data.data.username')
+    export VMANAGE_PASSWORD=$(echo "$_secret" | jq -r '.data.data.password')
+    # The Terraform provider reads TF_VAR_*.
+    export TF_VAR_vmanage_url="$VMANAGE_URL"
+    export TF_VAR_vmanage_username="$VMANAGE_USERNAME"
+    export TF_VAR_vmanage_password="$VMANAGE_PASSWORD"
+    export TF_VAR_student="$WS_STUDENT"
+    unset _secret
+    echo "Credentials loaded for ${VMANAGE_URL}"
+
+# ── stage: test ─────────────────────────────────────────────────────
+
+offline-tests:
+  stage: test
+  # No Vault, no fabric, no network. This job must stay that way — it is the
+  # one that still works when the lab is down.
+  script:
+    - pip install -q -e ".[dev]"
+    - python -m pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    expire_in: 1 week
+
+# ── stage: plan ─────────────────────────────────────────────────────
+
+terraform-plan:
+  stage: plan
+  needs: ["offline-tests"]
+  before_script:
+    - *install_terraform
+    - *load_vault_credentials
+  script:
+    - cd 04-terraform
+    - terraform init -input=false
+    - terraform plan -input=false -out=tfplan
+    # The human-readable plan is the review artifact: it is what a reviewer
+    # reads on the MR to answer "what exactly is going to change?".
+    - terraform show -no-color tfplan > ../plan.txt
+    - cat ../plan.txt
+  artifacts:
+    paths:
+      - plan.txt
+      - 04-terraform/tfplan
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ── stage: apply ────────────────────────────────────────────────────
+
+apply-and-verify:
+  stage: apply
+  needs: ["terraform-plan"]
+  environment:
+    name: fabric-lab
+    url: $VMANAGE_URL
+  before_script:
+    - *install_terraform
+    - *load_vault_credentials
+    - pip install -q -e .
+  script:
+    - cd 04-terraform && terraform init -input=false && cd ..
+    # precheck → apply → postcheck → rollback.
+    # Exits 1 on regression, having already rolled back. That exit code is
+    # what fails this job.
+    - python 05-pipeline/solution/pipeline.py
+  after_script:
+    # `after_script` runs even when the job fails — which is exactly when the
+    # snapshots matter most.
+    - echo "Snapshots kept as artifacts for post-mortem."
+  artifacts:
+    when: always
+    paths:
+      - snapshots/
+      - 05-pipeline/snapshots/
+    expire_in: 1 month
+  rules:
+    # Default branch only, and never automatically. Someone presses the button.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: false
+
+# ─────────────────────────────────────────────────────────────────────
+# Upgrade path: JWT instead of a static token
+#
+# The static VAULT_TOKEN above is the version that works everywhere. The
+# better version has GitLab prove its own identity to Vault, so there is no
+# long-lived token to leak or rotate at all:
+#
+#   apply-and-verify:
+#     id_tokens:
+#       VAULT_ID_TOKEN:
+#         aud: https://vault.autonetops.com
+#     script:
+#       - export VAULT_TOKEN="$(curl -sS --request POST \
+#           --data "{\"jwt\":\"${VAULT_ID_TOKEN}\",\"role\":\"sdwan-ci\"}" \
+#           ${VAULT_ADDR}/v1/auth/jwt/login | jq -r '.auth.client_token')"
+#
+# It needs the JWT auth backend enabled in Vault with a role bound to this
+# project. `id_tokens` is available on all GitLab tiers; the declarative
+# `secrets:vault:` keyword is Premium — which is why we do it with curl.
+# ─────────────────────────────────────────────────────────────────────

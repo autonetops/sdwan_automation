@@ -1,4 +1,4 @@
-"""O juiz da mudança. Testes puros — sem rede, rodam em qualquer lugar."""
+"""The judge of the change. Pure tests — no network, they run anywhere."""
 
 from sdwan_toolkit.diff import Severity, compare
 from sdwan_toolkit.state import DeviceState, FabricSnapshot
@@ -15,44 +15,44 @@ def _snapshot(**overrides):
                           devices={base["system_ip"]: DeviceState(**base)})
 
 
-def test_retratos_iguais_nao_geram_achados():
+def test_identical_snapshots_produce_no_findings():
     diff = compare(_snapshot(), _snapshot())
     assert diff.findings == []
     assert diff.ok
 
 
-def test_perder_sessao_bfd_e_regressao():
+def test_losing_a_bfd_session_is_a_regression():
     diff = compare(_snapshot(), _snapshot(bfd_sessions_up=2))
     assert not diff.ok
-    assert diff.regressions[0].metric == "sessões BFD"
+    assert diff.regressions[0].metric == "BFD sessions"
 
 
-def test_ganhar_sessao_bfd_nao_reprova():
+def test_gaining_a_bfd_session_does_not_fail():
     diff = compare(_snapshot(), _snapshot(bfd_sessions_up=6))
     assert diff.ok
     assert diff.findings[0].severity is Severity.IMPROVEMENT
 
 
-def test_device_inalcancavel_e_regressao():
+def test_device_going_unreachable_is_a_regression():
     diff = compare(_snapshot(), _snapshot(reachable=False))
     assert not diff.ok
 
 
-def test_peer_bfd_perdido_e_regressao():
+def test_losing_a_bfd_peer_is_a_regression():
     diff = compare(_snapshot(), _snapshot(bfd_peers=["10.255.255.12"]))
     assert not diff.ok
-    assert any("perdidos" in f.metric for f in diff.regressions)
+    assert any("lost" in f.metric for f in diff.regressions)
 
 
-def test_device_que_sumiu_reprova():
-    depois = FabricSnapshot(taken_at="2026-01-01T01:00:00+00:00", devices={})
-    diff = compare(_snapshot(), depois)
+def test_a_device_that_disappeared_fails():
+    after = FabricSnapshot(taken_at="2026-01-01T01:00:00+00:00", devices={})
+    diff = compare(_snapshot(), after)
     assert not diff.ok
     assert diff.missing_devices == ["10.255.255.11"]
 
 
-def test_snapshot_sobrevive_ao_disco(tmp_path):
+def test_snapshot_survives_a_round_trip_to_disk(tmp_path):
     original = _snapshot()
-    caminho = original.save(tmp_path / "antes.json")
-    recarregado = FabricSnapshot.load(caminho)
-    assert compare(original, recarregado).ok
+    path = original.save(tmp_path / "before.json")
+    reloaded = FabricSnapshot.load(path)
+    assert compare(original, reloaded).ok

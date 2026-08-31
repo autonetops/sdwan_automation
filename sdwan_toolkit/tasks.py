@@ -1,13 +1,13 @@
-"""O modelo de tarefa assíncrona do Manager.
+"""The Manager's asynchronous task model.
 
-Esta é *a* lição de automação do módulo 3. Escrever no Manager quase nunca é
-síncrono: você faz o POST, recebe um `id`, e a mudança acontece depois. Se o
-seu script não espera, ele mente — reporta sucesso antes de o fabric ter
-mudado (ou antes de ter falhado).
+This is *the* automation lesson of module 3. Writing to the Manager is almost
+never synchronous: you POST, you receive an `id`, and the change happens
+later. If your script doesn't wait, it lies — it reports success before the
+fabric has changed (or before it has failed).
 
-Esperar direito significa quatro coisas: intervalo entre consultas, timeout,
-distinguir "terminou com sucesso" de "terminou com erro", e devolver contexto
-suficiente para alguém debugar às 3 da manhã.
+Waiting properly means four things: an interval between polls, a timeout,
+telling "finished successfully" apart from "finished in error", and returning
+enough context for someone to debug at 3am.
 """
 
 from __future__ import annotations
@@ -26,11 +26,11 @@ FAILURE_STATES = {"failure", "failed", "error", "tear_down"}
 
 
 class TaskTimeout(SDWANError):
-    """A tarefa não terminou dentro do prazo."""
+    """The task did not finish within the deadline."""
 
 
 class TaskFailed(SDWANError):
-    """A tarefa terminou, mas em erro."""
+    """The task finished, but in error."""
 
 
 @dataclass
@@ -49,24 +49,24 @@ class TaskResult:
         ]
 
     def summary(self) -> str:
-        head = f"Tarefa {self.task_id}: {self.status} em {self.elapsed_seconds:.1f}s"
+        head = f"Task {self.task_id}: {self.status} in {self.elapsed_seconds:.1f}s"
         if not self.failed_devices:
             return head
-        detalhes = "\n".join(
+        details = "\n".join(
             f"  ✗ {d.get('host-name', d.get('deviceID', '?'))}: "
             f"{d.get('currentActivity') or d.get('activity') or d.get('statusType', '')}"
             for d in self.failed_devices
         )
-        return f"{head}\n{detalhes}"
+        return f"{head}\n{details}"
 
 
 def get_task_status(client: SDWANClient, task_id: str) -> dict[str, Any]:
-    """Estado bruto de uma tarefa.
+    """Raw state of a task.
 
-    Atenção ao formato: este endpoint devolve `{"summary": {...}, "data": [...]}`.
-    O desembrulho padrão do cliente devolveria só o `data` e jogaria fora o
-    `summary` — que é exatamente onde mora o estado da tarefa. Por isso aqui,
-    e só aqui, pedimos `unwrap=False`.
+    Mind the shape: this endpoint returns `{"summary": {...}, "data": [...]}`.
+    The client's default unwrapping would hand back only `data` and throw away
+    `summary` — which is exactly where the task state lives. So here, and only
+    here, we ask for `unwrap=False`.
     """
     raw = client.request("GET", f"/device/action/status/{task_id}", unwrap=False)
     if isinstance(raw, dict):
@@ -84,19 +84,20 @@ def wait_for_task(
     interval: int = 5,
     raise_on_failure: bool = True,
 ) -> TaskResult:
-    """Faz polling até a tarefa terminar.
+    """Poll until the task finishes.
 
     Args:
-        timeout: teto em segundos. Deploy de config group em vários sites
-            passa fácil de 5 minutos; não coloque 30.
-        interval: espaçamento entre consultas. Abaixo de ~3s você só gera
-            carga no Manager sem ganhar informação.
-        raise_on_failure: se False, devolve o TaskResult com `succeeded=False`
-            em vez de levantar. O pipeline usa False para poder fazer rollback.
+        timeout: ceiling in seconds. A multi-site config group deployment
+            easily passes 5 minutes; don't set 30.
+        interval: spacing between polls. Below ~3s you only add load to the
+            Manager without gaining information.
+        raise_on_failure: when False, return the TaskResult with
+            `succeeded=False` instead of raising. The pipeline passes False so
+            it can roll back.
 
     Raises:
-        TaskTimeout: estourou o prazo.
-        TaskFailed: terminou em erro (a menos que raise_on_failure=False).
+        TaskTimeout: the deadline passed.
+        TaskFailed: the task finished in error (unless raise_on_failure=False).
     """
     started = time.monotonic()
     last_status = "unknown"
@@ -107,7 +108,7 @@ def wait_for_task(
         summary = payload.get("summary") or {}
         devices = payload.get("data") or []
 
-        # O status confiável está no summary; o por-device serve para o relatório.
+        # The reliable status is in summary; the per-device rows feed the report.
         last_status = str(summary.get("status", "")).lower()
         if not last_status and devices:
             statuses = {str(d.get("status", "")).lower() for d in devices}
@@ -132,9 +133,9 @@ def wait_for_task(
 
         if elapsed > timeout:
             raise TaskTimeout(
-                f"Tarefa {task_id} ainda em '{last_status}' após {timeout}s. "
-                "Ela pode continuar rodando no Manager — confira na GUI antes de repetir."
+                f"Task {task_id} still '{last_status}' after {timeout}s. "
+                "It may still be running on the Manager — check the GUI before retrying."
             )
 
-        logger.info("Tarefa %s: %s (%.0fs)", task_id, last_status or "in_progress", elapsed)
+        logger.info("Task %s: %s (%.0fs)", task_id, last_status or "in_progress", elapsed)
         time.sleep(interval)

@@ -1,19 +1,19 @@
-"""Credenciais do Catalyst SD-WAN Manager, lidas do HashiCorp Vault.
+"""Catalyst SD-WAN Manager credentials, read from HashiCorp Vault.
 
-Regra número um de automação: credencial não mora no código, não mora no
-histórico do Git e não mora no seu `~/.bash_history`. Neste bootcamp elas
-moram no Vault (`https://vault.autonetops.com`) e chegam ao seu script por
-uma única função: `load_credentials()`.
+Rule number one of automation: credentials don't live in code, don't live in
+Git history, and don't live in your `~/.bash_history`. In this bootcamp they
+live in Vault (`https://vault.autonetops.com`) and reach your script through
+exactly one function: `load_credentials()`.
 
-Autenticação: token. Você recebe um token de leitura no início do bootcamp e
-o exporta como `VAULT_TOKEN`.
+Auth method: token. You get a read-only token at the start of the bootcamp
+and export it as `VAULT_TOKEN`.
 
     export VAULT_ADDR=https://vault.autonetops.com
     export VAULT_TOKEN=hvs.XXXXXXXXXXXX
 
-Fallback: se `VAULT_TOKEN` não estiver definido, caímos para as variáveis
-`VMANAGE_URL` / `VMANAGE_USERNAME` / `VMANAGE_PASSWORD`. Isso existe para
-desenvolvimento offline e para o pipeline de CI — nunca para o seu laptop.
+Fallback: if `VAULT_TOKEN` is unset, we fall back to `VMANAGE_URL` /
+`VMANAGE_USERNAME` / `VMANAGE_PASSWORD`. That exists for offline development
+and for the CI pipeline — never for your laptop.
 """
 
 from __future__ import annotations
@@ -27,19 +27,19 @@ DEFAULT_PATH = "sdwan/manager"
 
 
 class CredentialsError(RuntimeError):
-    """Não foi possível obter credenciais nem do Vault nem do ambiente."""
+    """Credentials could not be obtained from Vault or from the environment."""
 
 
 @dataclass(frozen=True)
 class ManagerCredentials:
-    """Endereço e login do Manager. Imutável de propósito."""
+    """Manager address and login. Immutable on purpose."""
 
     url: str
     username: str
     password: str
 
-    def __repr__(self) -> str:  # pragma: no cover - conveniência de debug
-        # Nunca deixe a senha vazar num traceback ou num log.
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        # Never let the password leak into a traceback or a log line.
         return f"ManagerCredentials(url={self.url!r}, username={self.username!r}, password='***')"
 
 
@@ -61,8 +61,8 @@ def _from_vault() -> ManagerCredentials | None:
         import hvac
     except ImportError as exc:  # pragma: no cover
         raise CredentialsError(
-            "VAULT_TOKEN está definido mas o pacote 'hvac' não está instalado. "
-            "Rode: uv pip install hvac"
+            "VAULT_TOKEN is set but the 'hvac' package is not installed. "
+            "Run: pip install hvac"
         ) from exc
 
     addr = os.getenv("VAULT_ADDR", DEFAULT_VAULT_ADDR)
@@ -72,10 +72,10 @@ def _from_vault() -> ManagerCredentials | None:
     client = hvac.Client(url=addr, token=token)
     if not client.is_authenticated():
         raise CredentialsError(
-            f"Token rejeitado por {addr}. Ele expirou? Peça um novo ao instrutor."
+            f"Token rejected by {addr}. Has it expired? Ask the instructor for a new one."
         )
 
-    # KV v2: o payload útil fica em data["data"]["data"].
+    # KV v2: the useful payload sits at data["data"]["data"].
     secret = client.secrets.kv.v2.read_secret_version(
         path=path, mount_point=mount, raise_on_deleted_version=True
     )
@@ -84,7 +84,7 @@ def _from_vault() -> ManagerCredentials | None:
     missing = {"url", "username", "password"} - data.keys()
     if missing:
         raise CredentialsError(
-            f"O segredo {mount}/{path} não tem as chaves: {', '.join(sorted(missing))}"
+            f"Secret {mount}/{path} is missing the keys: {', '.join(sorted(missing))}"
         )
 
     return ManagerCredentials(
@@ -95,15 +95,15 @@ def _from_vault() -> ManagerCredentials | None:
 
 
 def load_credentials() -> ManagerCredentials:
-    """Devolve as credenciais do Manager: Vault primeiro, ambiente depois.
+    """Return the Manager credentials: Vault first, environment second.
 
     Raises:
-        CredentialsError: se nenhuma das duas fontes estiver utilizável.
+        CredentialsError: when neither source is usable.
     """
     creds = _from_vault() or _from_env()
     if creds is None:
         raise CredentialsError(
-            "Sem credenciais. Exporte VAULT_TOKEN (recomendado) ou o trio "
+            "No credentials. Export VAULT_TOKEN (recommended) or the trio "
             "VMANAGE_URL / VMANAGE_USERNAME / VMANAGE_PASSWORD."
         )
     return creds

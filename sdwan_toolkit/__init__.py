@@ -1,14 +1,14 @@
-"""Toolkit de automação para Cisco Catalyst SD-WAN.
+"""Automation toolkit for Cisco Catalyst SD-WAN.
 
-Construído aula a aula durante o bootcamp. Cada módulo corresponde a uma etapa:
+Built one lesson at a time during the bootcamp. Each module maps to a stage:
 
-    vault        →  módulo 1  — credenciais fora do código
-    client       →  módulo 1  — sessão autenticada no Manager
-    inventory    →  módulo 1  — quem é quem no fabric
-    state        →  módulo 2  — retrato do estado operacional
-    diff         →  módulo 2  — o juiz da mudança
-    tasks        →  módulo 3  — o modelo assíncrono
-    configgroup  →  módulo 3  — mudança declarativa
+    vault        →  module 1  — credentials out of the code
+    client       →  module 1  — an authenticated session to the Manager
+    inventory    →  module 1  — who is who in the fabric
+    state        →  module 2  — an operational state snapshot
+    diff         →  module 2  — the judge of the change
+    tasks        →  module 3  — the asynchronous model
+    configgroup  →  module 3  — declarative change
 """
 
 from .client import AuthenticationError, SDWANClient, SDWANError

@@ -1,7 +1,7 @@
 [project]
 name = "sdwan-automation"
 version = "1.0.0"
-description = "Bootcamp de automação Cisco Catalyst SD-WAN — AutoNetOps"
+description = "Cisco Catalyst SD-WAN automation bootcamp — AutoNetOps"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

@@ -1,15 +1,15 @@
-# O provider oficial da Cisco para Catalyst SD-WAN.
+# Cisco's official provider for Catalyst SD-WAN.
 #
-# ⚠️ PIN DE VERSÃO: os nomes de resource mudaram bastante entre as versões
-#    0.x deste provider (`..._profile_parcel` virou `..._feature` em alguns
-#    releases). Fixe a versão e, quando algo não existir, consulte o schema
-#    de verdade em vez de adivinhar:
+# ⚠️ VERSION PINNING: resource names moved around a lot across the 0.x
+#    releases of this provider (`..._profile_parcel` became `..._feature` in
+#    some releases). Pin the version, and when something doesn't exist, read
+#    the real schema instead of guessing:
 #
 #        terraform providers schema -json | jq '.provider_schemas
 #          | .["registry.terraform.io/ciscodevnet/sdwan"].resource_schemas
 #          | keys'
 #
-#    Ler o schema do provider é uma habilidade de automação, não um contorno.
+#    Reading a provider's schema is an automation skill, not a workaround.
 
 terraform {
   required_version = ">= 1.6"
@@ -26,5 +26,5 @@ provider "sdwan" {
   url      = var.vmanage_url
   username = var.vmanage_username
   password = var.vmanage_password
-  insecure = true # lab com certificado self-signed
+  insecure = true # lab with a self-signed certificate
 }

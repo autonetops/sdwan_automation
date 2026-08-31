@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Exporta as credenciais do Manager a partir do Vault.
+# Export the Manager credentials from Vault.
 #
-# Uso:  source scripts/vault-env.sh
+# Usage:  source scripts/vault-env.sh
 #
-# Requer VAULT_ADDR e VAULT_TOKEN já no ambiente. Nada é escrito em disco —
-# credencial que toca o disco vira credencial vazada mais cedo ou mais tarde.
+# Requires VAULT_ADDR and VAULT_TOKEN already in the environment. Nothing is
+# written to disk — a credential that touches disk becomes a leaked credential
+# sooner or later.
 
 set -u
 
@@ -13,12 +14,12 @@ set -u
 : "${VAULT_SDWAN_PATH:=sdwan/manager}"
 
 if [ -z "${VAULT_TOKEN:-}" ]; then
-  echo "VAULT_TOKEN não definido. Peça o seu ao instrutor." >&2
+  echo "VAULT_TOKEN is not set. Ask the instructor for yours." >&2
   return 1 2>/dev/null || exit 1
 fi
 
 if ! command -v vault >/dev/null 2>&1; then
-  echo "CLI do vault não encontrada. Instale ou use o fallback do .env." >&2
+  echo "The vault CLI was not found. Install it, or use the .env fallback." >&2
   return 1 2>/dev/null || exit 1
 fi
 
@@ -30,10 +31,11 @@ VMANAGE_PASSWORD=$(vault kv get -field=password "${_secret}")
 
 export VMANAGE_URL VMANAGE_USERNAME VMANAGE_PASSWORD
 
-# O provider do Terraform lê TF_VAR_*.
+# The Terraform provider reads TF_VAR_*.
 export TF_VAR_vmanage_url="${VMANAGE_URL}"
 export TF_VAR_vmanage_username="${VMANAGE_USERNAME}"
 export TF_VAR_vmanage_password="${VMANAGE_PASSWORD}"
+export TF_VAR_student="${WS_STUDENT:-00}"
 
-echo "Credenciais carregadas para ${VMANAGE_URL} (usuário ${VMANAGE_USERNAME})."
+echo "Credentials loaded for ${VMANAGE_URL} (user ${VMANAGE_USERNAME})."
 unset _secret

@@ -1,24 +1,25 @@
-"""Fixtures: um Manager de mentira, com payloads no formato real.
+"""Fixtures: a fake Manager, with payloads in the real shape.
 
-Isto existe para você conseguir validar o seu código sem depender do lab
-estar de pé, sem esperar a fila da turma e sem risco de escrever no fabric.
+This exists so you can validate your code without the lab being up, without
+waiting for your turn in the class queue, and with no risk of writing to the
+fabric.
 """
 
 import pytest
 
 from sdwan_toolkit.vault import ManagerCredentials
 
-BASE_URL = "https://manager.exemplo.lab"
+BASE_URL = "https://manager.example.lab"
 
 
 @pytest.fixture
 def credentials():
-    return ManagerCredentials(url=BASE_URL, username="automation", password="s3nh4")
+    return ManagerCredentials(url=BASE_URL, username="automation", password="s3cr3t")
 
 
 @pytest.fixture
 def device_payload():
-    """Formato real de /dataservice/device — repare nas chaves com hífen."""
+    """The real shape of /dataservice/device — note the hyphenated keys."""
     return [
         {
             "deviceId": "10.255.255.2", "system-ip": "10.255.255.2",

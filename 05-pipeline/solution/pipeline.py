@@ -1,4 +1,4 @@
-"""Módulo 5 — solução comentada do pipeline de mudança validada."""
+"""Module 5 — annotated solution for the validated change pipeline."""
 
 import argparse
 import os
@@ -10,102 +10,101 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sdwan_toolkit import SDWANClient, compare, take_snapshot  # noqa: E402
-from sdwan_toolkit.inventory import unreachable  # noqa: E402
 from sdwan_toolkit.state import FabricSnapshot  # noqa: E402
 
-RETRATOS = Path("snapshots")
+SNAPSHOTS = Path("snapshots")
 TERRAFORM_DIR = Path(__file__).resolve().parents[2] / "04-terraform"
 
-# BFD e OMP levam tempo para reconvergir depois de um push. Verificar cedo
-# demais acusa uma regressão que não existe — e um pipeline que grita lobo
-# é um pipeline que as pessoas desligam.
-ESPERA_CONVERGENCIA = 60
+# BFD and OMP take time to reconverge after a push. Checking too early reports
+# a regression that isn't real — and a pipeline that cries wolf is a pipeline
+# people switch off.
+CONVERGENCE_WAIT = 60
 
 
 def precheck(client: SDWANClient) -> FabricSnapshot:
     print("── PRECHECK ──")
-    retrato = take_snapshot(client)
+    snapshot = take_snapshot(client)
 
-    fora = [e for e in retrato.devices.values() if not e.reachable]
-    if fora:
-        # Não abortamos: num lab compartilhado sempre tem alguém com um device
-        # derrubado de propósito. Mas registramos, porque o `compare` só olha
-        # a DIFERENÇA — um device que já estava fora antes e depois não gera
-        # achado nenhum, e sem esta linha ninguém perceberia.
-        nomes = ", ".join(e.hostname for e in fora)
-        print(f"  ⚠ Já estavam inalcançáveis ANTES da mudança: {nomes}")
+    down = [d for d in snapshot.devices.values() if not d.reachable]
+    if down:
+        # We don't abort: in a shared lab someone always has a device
+        # deliberately down. But we record it, because `compare` only looks at
+        # the DIFFERENCE — a device that was already down before and after
+        # produces no finding at all, and without this line nobody would notice.
+        names = ", ".join(d.hostname for d in down)
+        print(f"  ⚠ Already unreachable BEFORE the change: {names}")
 
-    caminho = retrato.save(RETRATOS / "antes.json")
-    print(f"  Retrato salvo em {caminho} ({len(retrato.devices)} dispositivos)")
-    return retrato
+    path = snapshot.save(SNAPSHOTS / "before.json")
+    print(f"  Snapshot saved to {path} ({len(snapshot.devices)} devices)")
+    return snapshot
 
 
-def aplicar() -> bool:
+def apply_change() -> bool:
     print("── APPLY ──")
-    # Lista de argumentos, nunca shell=True com string montada.
-    resultado = subprocess.run(
+    # A list of arguments, never shell=True with a built-up string.
+    result = subprocess.run(
         ["terraform", "apply", "-auto-approve", "-input=false"],
         cwd=TERRAFORM_DIR,
         text=True,
     )
-    return resultado.returncode == 0
+    return result.returncode == 0
 
 
-def postcheck(client: SDWANClient, antes: FabricSnapshot) -> bool:
+def postcheck(client: SDWANClient, before: FabricSnapshot) -> bool:
     print("── POSTCHECK ──")
-    print(f"  Aguardando {ESPERA_CONVERGENCIA}s de convergência…")
-    time.sleep(ESPERA_CONVERGENCIA)
+    print(f"  Waiting {CONVERGENCE_WAIT}s for convergence…")
+    time.sleep(CONVERGENCE_WAIT)
 
-    depois = take_snapshot(client)
-    depois.save(RETRATOS / "depois.json")
+    after = take_snapshot(client)
+    after.save(SNAPSHOTS / "after.json")
 
-    diferenca = compare(antes, depois)
-    print(diferenca.report())
-    return diferenca.ok
+    difference = compare(before, after)
+    print(difference.report())
+    return difference.ok
 
 
 def rollback() -> None:
     print("── ROLLBACK ──")
-    # Escolha: `terraform apply` com o valor default da variável, em vez de
-    # `destroy`. Destruir o config group inteiro é mais violento que a mudança
-    # que estamos desfazendo — e rollback que causa mais impacto que o
-    # problema original não é rollback, é um segundo incidente.
-    resultado = subprocess.run(
+    # Choice: `terraform apply` with the default variable value, rather than
+    # `destroy`. Destroying the whole config group is more violent than the
+    # change we are undoing — and a rollback that causes more impact than the
+    # original problem is not a rollback, it's a second incident.
+    result = subprocess.run(
         ["terraform", "apply", "-auto-approve", "-input=false",
-         "-var", "banner_motd=ROLLBACK - estado anterior restaurado"],
+         "-var", "banner_motd=ROLLBACK - previous state restored"],
         cwd=TERRAFORM_DIR,
         text=True,
     )
-    if resultado.returncode == 0:
-        print("  Rollback aplicado.")
+    if result.returncode == 0:
+        print("  Rollback applied.")
     else:
-        # Rollback que falha é a pior situação possível: escalar, não repetir.
-        print("  ✗ ROLLBACK FALHOU — intervenção manual necessária.")
+        # A failed rollback is the worst place to be: escalate, don't retry.
+        print("  ✗ ROLLBACK FAILED — manual intervention required.")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Pipeline de mudança validada")
+    parser = argparse.ArgumentParser(description="Validated change pipeline")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    RETRATOS.mkdir(exist_ok=True)
+    SNAPSHOTS.mkdir(exist_ok=True)
 
     with SDWANClient.from_vault() as client:
-        antes = precheck(client)
+        before = precheck(client)
 
         if args.dry_run:
-            print("\n[dry-run] Nenhuma mudança aplicada.")
-            return 0 if postcheck(client, antes) else 1
+            print("\n[dry-run] No change applied.")
+            return 0 if postcheck(client, before) else 1
 
-        if not aplicar():
-            print("Apply falhou. Nada a verificar.")
+        if not apply_change():
+            print("Apply failed. Nothing to verify.")
             return 1
 
-        if postcheck(client, antes):
-            print("\n✓ Fabric íntegro. Mudança mantida.")
+        if postcheck(client, before):
+            print("\n✓ Fabric intact. Change kept.")
             return 0
 
-        print("\n✗ Regressão detectada.")
+        print("\n✗ Regression detected.")
         rollback()
         return 1
 

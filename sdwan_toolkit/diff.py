@@ -1,11 +1,11 @@
-"""Comparação de retratos — o juiz da mudança.
+"""Snapshot comparison — the judge of the change.
 
-Um diff de snapshot não é um `diff` de texto. Ele é **assimétrico de
-propósito**: ganhar sessão BFD é bom, perder é ruim. O pipeline precisa dessa
-opinião para decidir entre seguir em frente e fazer rollback.
+A snapshot diff is not a text `diff`. It is **asymmetric on purpose**: gaining
+a BFD session is good, losing one is bad. The pipeline needs that opinion to
+decide between moving forward and rolling back.
 
-Regra de decisão: só regressão reprova. Melhorias e mudanças neutras entram no
-relatório, mas não derrubam o deploy.
+Decision rule: only regressions fail. Improvements and neutral changes appear
+in the report but do not block the deployment.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from .state import DeviceState, FabricSnapshot
 
 
 class Severity(str, Enum):
-    REGRESSION = "regression"   # piorou — reprova a mudança
-    IMPROVEMENT = "improvement" # melhorou — só informa
-    INFO = "info"               # mudou sem piorar
+    REGRESSION = "regression"    # got worse — fails the change
+    IMPROVEMENT = "improvement"  # got better — informational
+    INFO = "info"                # changed without getting worse
 
 
 @dataclass
@@ -52,27 +52,27 @@ class SnapshotDiff:
 
     @property
     def ok(self) -> bool:
-        """True quando é seguro seguir em frente."""
+        """True when it is safe to move forward."""
         return not self.regressions and not self.missing_devices
 
     def report(self) -> str:
         lines: list[str] = []
         if self.missing_devices:
-            lines.append(f"✗ Sumiram do fabric: {', '.join(sorted(self.missing_devices))}")
+            lines.append(f"✗ Gone from the fabric: {', '.join(sorted(self.missing_devices))}")
         if self.new_devices:
-            lines.append(f"· Novos no fabric: {', '.join(sorted(self.new_devices))}")
+            lines.append(f"· New in the fabric: {', '.join(sorted(self.new_devices))}")
         lines.extend(str(f) for f in self.findings)
         if not lines:
-            return "Nenhuma diferença entre os retratos."
-        verdict = "APROVADO" if self.ok else "REPROVADO"
-        return "\n".join(lines) + f"\n\nVeredito: {verdict}"
+            return "No differences between the snapshots."
+        verdict = "PASS" if self.ok else "FAIL"
+        return "\n".join(lines) + f"\n\nVerdict: {verdict}"
 
 
-# Métricas em que "maior é melhor". Cair = regressão.
+# Metrics where "higher is better". A drop is a regression.
 _HIGHER_IS_BETTER = (
-    ("control_connections_up", "conexões de controle"),
-    ("bfd_sessions_up", "sessões BFD"),
-    ("omp_peers_up", "peers OMP"),
+    ("control_connections_up", "control connections"),
+    ("bfd_sessions_up", "BFD sessions"),
+    ("omp_peers_up", "OMP peers"),
 )
 
 
@@ -81,12 +81,12 @@ def _compare_device(before: DeviceState, after: DeviceState) -> list[Finding]:
 
     if before.reachable and not after.reachable:
         findings.append(
-            Finding(after.system_ip, after.hostname, "alcançabilidade", "reachable",
+            Finding(after.system_ip, after.hostname, "reachability", "reachable",
                     "unreachable", Severity.REGRESSION)
         )
     elif not before.reachable and after.reachable:
         findings.append(
-            Finding(after.system_ip, after.hostname, "alcançabilidade", "unreachable",
+            Finding(after.system_ip, after.hostname, "reachability", "unreachable",
                     "reachable", Severity.IMPROVEMENT)
         )
 
@@ -103,7 +103,7 @@ def _compare_device(before: DeviceState, after: DeviceState) -> list[Finding]:
     lost_peers = set(before.bfd_peers) - set(after.bfd_peers)
     if lost_peers:
         findings.append(
-            Finding(after.system_ip, after.hostname, "peers BFD perdidos", sorted(lost_peers),
+            Finding(after.system_ip, after.hostname, "BFD peers lost", sorted(lost_peers),
                     [], Severity.REGRESSION)
         )
 
@@ -111,7 +111,7 @@ def _compare_device(before: DeviceState, after: DeviceState) -> list[Finding]:
 
 
 def compare(before: FabricSnapshot, after: FabricSnapshot) -> SnapshotDiff:
-    """Compara dois retratos e emite um veredito."""
+    """Compare two snapshots and return a verdict."""
     diff = SnapshotDiff()
     diff.missing_devices = sorted(before.devices.keys() - after.devices.keys())
     diff.new_devices = sorted(after.devices.keys() - before.devices.keys())
