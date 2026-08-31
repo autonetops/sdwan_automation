@@ -2,8 +2,10 @@
 
 import responses
 
+import json
+
 from sdwan_toolkit.client import SDWANClient
-from sdwan_toolkit.configgroup import deploy, preview_device_config
+from sdwan_toolkit.configgroup import deploy, preview_device_config, set_device_variables
 from tests.conftest import BASE_URL
 
 GROUP_ID = "9491a7ce-0000-0000-0000-000000000001"
@@ -46,3 +48,25 @@ def test_deploy_pulls_the_task_id_out_of_parenttaskid(credentials):
     client = SDWANClient(credentials, min_interval=0).login()
     task_id = deploy(client, GROUP_ID, [DEVICE_UUID], wait=False)
     assert task_id == "task-4242"
+
+
+@responses.activate
+def test_variables_roundtrip_renames_family_to_solution(credentials):
+    """The variables GET answers with `family`; the PUT schema rejects that key
+    and demands `solution` (SCHVALID0001, verified on 20.15). The GET→modify→PUT
+    loop only works because set_device_variables renames it."""
+    _mock_login_ok()
+    responses.add(
+        responses.PUT,
+        f"{BASE_URL}/dataservice/v1/config-group/{GROUP_ID}/device/variables",
+        json={}, status=200,
+    )
+    client = SDWANClient(credentials, min_interval=0).login()
+    payload = {"family": "sdwan",
+               "devices": [{"device-id": DEVICE_UUID,
+                            "variables": [{"name": "system_ip", "value": "101.1.1.1"}]}]}
+    set_device_variables(client, GROUP_ID, payload)
+    sent = json.loads(responses.calls[-1].request.body)
+    assert sent["solution"] == "sdwan"
+    assert "family" not in sent
+    assert payload["family"] == "sdwan", "caller's payload must not be mutated"

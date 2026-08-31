@@ -96,7 +96,15 @@ def set_device_variables(
 
     The payload carries internal fields the Manager expects back untouched.
     Rebuilding it by hand is like doing `write erase` to change a hostname.
+
+    ⚠️ One asymmetry the GET→modify→PUT loop trips over (verified on 20.15):
+    the GET hands the family back under `family`, but the PUT schema rejects
+    that key and demands `solution`. We rename it here so callers can round-
+    trip the payload untouched.
     """
+    payload = dict(payload)
+    if "family" in payload and "solution" not in payload:
+        payload["solution"] = payload.pop("family")
     client.put(f"/v1/config-group/{group_id}/device/variables", payload)
 
 

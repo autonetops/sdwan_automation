@@ -141,7 +141,6 @@ apply-and-verify:
     when: always
     paths:
       - snapshots/
-      - 05-pipeline/snapshots/
     expire_in: 1 month
   rules:
     # Default branch only, and never automatically. Someone presses the button.
