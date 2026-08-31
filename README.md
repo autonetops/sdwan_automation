@@ -28,7 +28,7 @@ deliberate.
 ## Before you start
 
 ```bash
-git clone <this-repo>
+git clone https://gitlab.autonetops.com/workshop/sdwan_automation.git
 cd sdwan_automation
 
 python -m venv .venv && source .venv/bin/activate

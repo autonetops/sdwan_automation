@@ -106,10 +106,14 @@ def preview_device_config(client: SDWANClient, group_id: str, device_uuid: str) 
     Use this before every deployment. It's free, it's safe, and it's the only
     way to answer "what exactly is going to change?" before finding out the
     hard way.
+
+    ⚠️ This is a POST, not a GET — a GET here answers 405. The Manager treats
+    the preview as a computation it runs for you, not a resource it holds. The
+    CLI comes back under `newConfig` (verified on 20.15).
     """
-    result = client.get(f"/v1/config-group/{group_id}/device/{device_uuid}/preview")
+    result = client.post(f"/v1/config-group/{group_id}/device/{device_uuid}/preview", {})
     if isinstance(result, dict):
-        return result.get("config") or result.get("deviceConfigurationPreview") or str(result)
+        return result.get("newConfig") or result.get("config") or str(result)
     return str(result)
 
 

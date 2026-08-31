@@ -8,5 +8,9 @@
 #
 # Or use the repo shortcut:  source ../scripts/vault-env.sh
 
-student     = "07"
+# Your number normally comes from WS_STUDENT (vault-env.sh exports it as
+# TF_VAR_student). Uncomment here ONLY to override — a value in this file
+# beats the environment, which is how a whole class ends up as ws07-.
+# student   = "07"
+
 banner_motd = "Managed by Terraform - AutoNetOps Bootcamp"
