@@ -96,17 +96,20 @@ terraform-plan:
     - *install_terraform
     - *load_vault_credentials
   script:
-    - cd 04-terraform
+    # The solution dir, not the exercise dir: 04-terraform/main.tf ships with
+    # the module 4 deliberate error (TODO 2.1) for students to fix, so CI
+    # against it would fail forever by design.
+    - cd 04-terraform/solution
     - terraform init -input=false
     - terraform plan -input=false -out=tfplan
     # The human-readable plan is the review artifact: it is what a reviewer
     # reads on the MR to answer "what exactly is going to change?".
-    - terraform show -no-color tfplan > ../plan.txt
-    - cat ../plan.txt
+    - terraform show -no-color tfplan > ../../plan.txt
+    - cat ../../plan.txt
   artifacts:
     paths:
       - plan.txt
-      - 04-terraform/tfplan
+      - 04-terraform/solution/tfplan
     expire_in: 1 week
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -125,7 +128,7 @@ apply-and-verify:
     - *load_vault_credentials
     - pip install -q -e .
   script:
-    - cd 04-terraform && terraform init -input=false && cd ..
+    - cd 04-terraform/solution && terraform init -input=false && cd ../..
     # precheck → apply → postcheck → rollback.
     # Exits 1 on regression, having already rolled back. That exit code is
     # what fails this job.

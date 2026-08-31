@@ -13,7 +13,10 @@ from sdwan_toolkit import SDWANClient, compare, take_snapshot  # noqa: E402
 from sdwan_toolkit.state import FabricSnapshot  # noqa: E402
 
 SNAPSHOTS = Path("snapshots")
-TERRAFORM_DIR = Path(__file__).resolve().parents[2] / "04-terraform"
+# The solution applies the solution's terraform dir. The exercise dir ships
+# the module 4 deliberate error (TODO 2.1), which is the student's to fix —
+# their own pipeline.py applies ../04-terraform once they have.
+TERRAFORM_DIR = Path(__file__).resolve().parents[2] / "04-terraform" / "solution"
 
 # BFD and OMP take time to reconverge after a push. Checking too early reports
 # a regression that isn't real — and a pipeline that cries wolf is a pipeline
