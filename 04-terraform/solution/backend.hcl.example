@@ -12,14 +12,10 @@
 #     export TF_HTTP_PASSWORD="<personal access token, scope: api>"
 #
 # PROJECT_ID: GitLab project → Settings → General, under the project name.
-# STATE_NAME: anything, but make it yours — ws<NN>-sdwan. One project can
-#             hold many named states; two students sharing a name share a
-#             state, which is exactly the collision the ws<NN>- prefix rule
-#             exists to prevent.
 
-address        = "https://gitlab.autonetops.com/api/v4/projects/PROJECT_ID/terraform/state/ws00-sdwan"
-lock_address   = "https://gitlab.autonetops.com/api/v4/projects/PROJECT_ID/terraform/state/ws00-sdwan/lock"
-unlock_address = "https://gitlab.autonetops.com/api/v4/projects/PROJECT_ID/terraform/state/ws00-sdwan/lock"
+address        = "https://gitlab.autonetops.com/api/v4/projects/283/terraform/state/sdwan"
+lock_address   = "https://gitlab.autonetops.com/api/v4/projects/283/terraform/state/sdwan/lock"
+unlock_address = "https://gitlab.autonetops.com/api/v4/projects/283/terraform/state/sdwan/lock"
 
 # GitLab's state API expects these verbs. They are not the backend's
 # defaults, and getting them wrong produces a 404 at lock time that reads
