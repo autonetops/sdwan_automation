@@ -14,6 +14,11 @@ on:
 env:
   VAULT_ADDR: https://vault.autonetops.com
   WS_STUDENT: "00"
+  # Module 4 PART B ships two credential paths. GitLab's pipeline uses the
+  # Vault provider; here vault-action has already fetched the secret, so the
+  # TF_VAR_vmanage_* path is the honest choice. This is the case the fallback
+  # exists for — an environment that solved the problem before Terraform ran.
+  TF_VAR_credentials_from_vault: "false"
 
 jobs:
   offline-tests:
@@ -47,10 +52,19 @@ jobs:
             secret/data/sdwan/manager username | TF_VAR_vmanage_username ;
             secret/data/sdwan/manager password | TF_VAR_vmanage_password
 
+      # Module 4 PART C points the state at GitLab-managed Terraform state,
+      # which this runner has no credentials for. Dropping backend.tf falls
+      # back to a local state file — fine for a plan, and the reason the
+      # GitLab pipeline is the supported one: state that lives for the
+      # length of a container is state nobody can review or lock.
+      - run: rm -f 04-terraform/solution/backend.tf
+
+      # The solution dir, not the exercise dir: 04-terraform ships the
+      # deliberate errors (TODO 2.1, TODO 4.1) for students to fix.
       - run: terraform init -input=false
-        working-directory: 04-terraform
+        working-directory: 04-terraform/solution
       - run: terraform plan -input=false -var "student=$WS_STUDENT"
-        working-directory: 04-terraform
+        working-directory: 04-terraform/solution
 
   apply-and-verify:
     name: Apply with verification and rollback
@@ -83,8 +97,9 @@ jobs:
           echo "TF_VAR_vmanage_password=$VMANAGE_PASSWORD" >> "$GITHUB_ENV"
           echo "TF_VAR_student=$WS_STUDENT"                >> "$GITHUB_ENV"
 
+      - run: rm -f 04-terraform/solution/backend.tf
       - run: terraform init -input=false
-        working-directory: 04-terraform
+        working-directory: 04-terraform/solution
 
       # The pipeline exits 1 on regression — having already rolled back.
       - name: Precheck → apply → postcheck → rollback
@@ -97,4 +112,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fabric-snapshots
-          path: 05-pipeline/snapshots/
+          path: snapshots/

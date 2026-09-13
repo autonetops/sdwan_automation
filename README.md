@@ -19,11 +19,17 @@ layer, and you leave with it working.
 | [01 — Connecting to the Manager](01-connecting-to-manager/) | 45 min | HTTP sessions, secrets out of code | `j_security_check` + `X-XSRF-TOKEN` handshake |
 | [02 — State as data](02-operational-state/) | 50 min | Modelling, snapshots, diffing | Control connections, BFD, OMP, app-route |
 | [03 — Config Groups](03-config-groups/) | 50 min | Idempotency, async tasks, dry-run | Feature profiles, parcels, deploy |
-| [04 — Terraform](04-terraform/) | 45 min | Declarative, state, drift | Config group as code |
+| [04 — Terraform](04-terraform/) | 45 min + 30 | Declarative, state, drift, secrets Terraform fetches itself, state in GitLab | Config group as code |
 | [05 — Pipeline](05-pipeline/) | 30 min | CI/CD, verification, rollback | Fabric pre/post checks |
 
 The remaining 20 minutes are for the opening, a break and the wrap-up. That's
 deliberate.
+
+Module 4 carries a `+ 30`: PART A is the 45-minute core, and PARTS B and C —
+credentials fetched from Vault, state moved to GitLab — are ~15 minutes each.
+Run them in the room if the day is going quickly, hand them over as the
+take-home if it isn't. They're the two steps between "it worked on my laptop"
+and "it runs without me", so they're worth the overrun when there's room.
 
 ## Before you start
 
@@ -54,6 +60,10 @@ source scripts/vault-env.sh         # exports VMANAGE_* and TF_VAR_*
 The secret lives at `secret/sdwan/manager` with the keys `url`, `username` and
 `password`. All the code reads it through one function:
 `sdwan_toolkit.vault.load_credentials()`.
+
+From module 4 PART B onward, Terraform stops being handed the credentials and
+goes and gets them — so `TF_VAR_vmanage_*` disappears and `VAULT_TOKEN` is the
+only secret left in your shell.
 
 > **Why Vault and not a `.env`?** Because today's `.env` is tomorrow's
 > accidental commit. And because revoking a token is instant, while changing a
@@ -104,9 +114,16 @@ into:
 
 - `.gitlab-ci.yml` — three stages (test → plan → apply). MRs get the offline
   tests and a `terraform plan`; the apply is default-branch-only and **manual**.
-  Requires one masked, protected CI/CD variable: `VAULT_TOKEN`.
+  Terraform state is served by GitLab (Operate → Terraform states), so `plan`
+  and `apply` — separate jobs, separate containers — share one locked state.
+  Requires one masked, protected CI/CD variable: `VAULT_TOKEN`. The state
+  backend authenticates with the job's own `CI_JOB_TOKEN`, so there's nothing
+  else to store.
 - `.github/workflows/change-validation.yml` — the same shape with GitHub
-  Actions, gated by a `fabric-lab` environment.
+  Actions, gated by a `fabric-lab` environment. It runs without the GitLab
+  state backend (that runner has no credentials for it), which is precisely
+  why the GitLab pipeline is the supported one: state that lives for the
+  length of a container is state nobody can review or lock.
 
 ## What was left out
 

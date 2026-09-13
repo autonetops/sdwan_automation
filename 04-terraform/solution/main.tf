@@ -7,6 +7,15 @@
 # The point of this lesson is NOT that Terraform is better. It is that
 # Terraform is only usable by someone who understands what it is hiding —
 # which is exactly what you implemented by hand an hour ago.
+#
+# The module runs in three parts. This file is PART A:
+#
+#   PART A  the change itself          main.tf      STEP 1, 2, 3
+#   PART B  credentials out of Vault   vault.tf     STEP 4
+#   PART C  state in GitLab            backend.tf   STEP 5
+#
+# Each part takes something that was being held by hand and gives it to the
+# machine: the change, then the secret, then the state.
 # ─────────────────────────────────────────────────────────────────────
 
 locals {
@@ -39,6 +48,17 @@ locals {
 resource "sdwan_system_feature_profile" "bootcamp" {
   name        = "${local.prefix}system-profile"
   description = "System feature profile created in the automation bootcamp"
+
+  # Guard, not decoration: without it, missing credentials surface as an
+  # authentication error from the provider, which sends you looking at the
+  # Manager instead of at your shell. A precondition is the cheapest
+  # documentation there is — it only speaks when you need it.
+  lifecycle {
+    precondition {
+      condition     = local.manager.url != null && local.manager.password != null
+      error_message = "No Manager credentials. Export VAULT_TOKEN (credentials_from_vault = true), or set credentials_from_vault = false and provide TF_VAR_vmanage_*."
+    }
+  }
 }
 
 # ── STEP 2 ──────────────────────────────────────────────────────────
@@ -67,3 +87,5 @@ resource "sdwan_configuration_group" "bootcamp" {
     sdwan_system_feature_profile.bootcamp.id
   ]
 }
+
+# ── STEP 4 is in vault.tf, STEP 5 is in backend.tf ──────────────────

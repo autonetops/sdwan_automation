@@ -1,6 +1,7 @@
 # Copy to terraform.tfvars (which is in .gitignore).
 #
-# Credentials do NOT go here. They come out of Vault as environment variables:
+# Credentials do NOT go here. In PART A they come out of Vault as environment
+# variables:
 #
 #   export TF_VAR_vmanage_url=$(vault kv get -field=url secret/sdwan/manager)
 #   export TF_VAR_vmanage_username=$(vault kv get -field=username secret/sdwan/manager)
@@ -14,3 +15,20 @@
 # student   = "07"
 
 banner_motd = "Managed by Terraform - AutoNetOps Bootcamp"
+
+# ── PART B (TASK 4) ─────────────────────────────────────────────────
+# Flip this to true and Terraform reads secret/sdwan/manager itself. The
+# three TF_VAR_vmanage_* above stop being needed; VAULT_TOKEN starts being
+# the only secret you hold. Fix TODO 4.1 in vault.tf first — the shipped
+# data source reads a KV v1 mount and this one is v2.
+# credentials_from_vault = true
+
+# Defaults are right for the bootcamp lab; override only if the instructor
+# says the secret moved.
+# vault_address     = "https://vault.autonetops.com"
+# vault_mount       = "secret"
+# vault_secret_path = "sdwan/manager"
+
+# ── PART C (TASK 5) ─────────────────────────────────────────────────
+# Nothing goes here. Backend settings cannot read variables — they live in
+# backend.hcl and reach Terraform through `init -backend-config`.

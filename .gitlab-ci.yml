@@ -1,7 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────
 # Validated change pipeline for the Catalyst SD-WAN fabric
 #
-# The module 5 exercise, running for real.
+# The module 5 exercise, running for real — on top of module 4's PART B
+# (credentials from Vault) and PART C (state in GitLab).
 #
 # Note the shape: merge requests only get offline tests + `terraform plan`
 # (safe, runs on any MR). The apply — with verification and rollback — only
@@ -9,10 +10,15 @@
 # kind that applies fastest. It is the kind that errs toward the safe side.
 #
 # Required CI/CD variable (Settings → CI/CD → Variables):
-#   VAULT_TOKEN   masked + protected. Everything else comes from Vault.
+#   VAULT_TOKEN   masked + protected. That is the whole list.
 #
-# Nothing else is stored in GitLab. That is the whole point: one secret to
-# rotate, one secret to revoke.
+# Nothing else is stored in GitLab. Terraform reads the Manager credentials
+# from Vault itself (04-terraform/solution/vault.tf) and the Python toolkit
+# does the same through sdwan_toolkit.vault.load_credentials(). State
+# authenticates with the job's own CI_JOB_TOKEN, which GitLab mints and
+# revokes around each job — there is no state secret to store at all.
+#
+# One secret to rotate, one secret to revoke.
 # ─────────────────────────────────────────────────────────────────────
 
 stages:
@@ -21,13 +27,50 @@ stages:
   - apply
 
 variables:
+  # ── Vault ─────────────────────────────────────────────────────────
+  # Read by the Python toolkit (hvac) and, as TF_VAR_*, by the Terraform
+  # vault provider. Addresses, not secrets — the token is the CI/CD variable.
   VAULT_ADDR: "https://vault.autonetops.com"
   VAULT_SDWAN_MOUNT: "secret"
   VAULT_SDWAN_PATH: "sdwan/manager"
+
   TERRAFORM_VERSION: "1.9.8"
   TF_IN_AUTOMATION: "true"
-  # The student number used by the pipeline's own config group.
+
+  # ── Terraform inputs ──────────────────────────────────────────────
+  # Terraform reads any variable from TF_VAR_<name>, so a CI/CD variable is
+  # all it takes — no -var flags to keep in sync across jobs.
   WS_STUDENT: "00"
+  TF_VAR_student: "${WS_STUDENT}"
+  TF_VAR_vault_address: "${VAULT_ADDR}"
+  TF_VAR_vault_mount: "${VAULT_SDWAN_MOUNT}"
+  TF_VAR_vault_secret_path: "${VAULT_SDWAN_PATH}"
+
+  # ── Terraform state, served by GitLab ─────────────────────────────
+  # Module 4 PART C. backend.tf declares `backend "http" {}` and nothing
+  # else; every argument arrives here as TF_HTTP_*, which is what makes one
+  # config usable from a laptop and from a pipeline at the same time.
+  #
+  # Why this matters more in CI than anywhere else: `plan` and `apply` below
+  # are separate jobs in separate containers. With state as a local file the
+  # apply job would start from an empty state on every run and try to create
+  # a config group that already exists. Shared state is not a nicety here,
+  # it is the thing that makes the pipeline correct.
+  TF_STATE_NAME: "sdwan-bootcamp"
+  TF_HTTP_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
+  TF_HTTP_LOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+  TF_HTTP_UNLOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+  # GitLab's state API expects these verbs; they are not the backend's
+  # defaults, and getting them wrong produces a 404 at lock time that reads
+  # like the state does not exist.
+  TF_HTTP_LOCK_METHOD: "POST"
+  TF_HTTP_UNLOCK_METHOD: "DELETE"
+  TF_HTTP_RETRY_WAIT_MIN: "5"
+  # The job authenticates as itself. CI_JOB_TOKEN is minted when the job
+  # starts and revoked when it ends — a credential nobody has to store,
+  # rotate, or remember to revoke when someone leaves.
+  TF_HTTP_USERNAME: "gitlab-ci-token"
+  TF_HTTP_PASSWORD: "${CI_JOB_TOKEN}"
 
 default:
   image: python:3.12-slim
@@ -43,34 +86,16 @@ default:
   - unzip -o -q /tmp/tf.zip -d /usr/local/bin
   - terraform version
 
-# Pull the Manager credentials out of Vault and into the job environment.
-#
-# We use the HTTP API with curl rather than the Vault CLI so the job image
-# stays small. `secret/data/...` is the KV v2 read path — KV v1 would be
-# `secret/...` with no `/data`. Getting this wrong is the most common Vault
-# mistake, so it is worth reading twice.
-.load_vault_credentials: &load_vault_credentials
+# The only credential check worth doing up front. Everything downstream —
+# Terraform's vault provider, the toolkit's hvac client — fails with a
+# clearer message if the token is simply absent, so catch that here.
+.require_vault_token: &require_vault_token
   - |
     if [ -z "${VAULT_TOKEN:-}" ]; then
       echo "VAULT_TOKEN is not set. Add it as a masked, protected CI/CD variable." >&2
       exit 1
     fi
-    _secret=$(curl -sS --fail \
-      --header "X-Vault-Token: ${VAULT_TOKEN}" \
-      "${VAULT_ADDR}/v1/${VAULT_SDWAN_MOUNT}/data/${VAULT_SDWAN_PATH}") || {
-        echo "Vault rejected the read. Token expired, or the policy is missing this path." >&2
-        exit 1
-      }
-    export VMANAGE_URL=$(echo "$_secret" | jq -r '.data.data.url')
-    export VMANAGE_USERNAME=$(echo "$_secret" | jq -r '.data.data.username')
-    export VMANAGE_PASSWORD=$(echo "$_secret" | jq -r '.data.data.password')
-    # The Terraform provider reads TF_VAR_*.
-    export TF_VAR_vmanage_url="$VMANAGE_URL"
-    export TF_VAR_vmanage_username="$VMANAGE_USERNAME"
-    export TF_VAR_vmanage_password="$VMANAGE_PASSWORD"
-    export TF_VAR_student="$WS_STUDENT"
-    unset _secret
-    echo "Credentials loaded for ${VMANAGE_URL}"
+    echo "Vault token present; ${VAULT_ADDR} will be read at plan time."
 
 # ── stage: test ─────────────────────────────────────────────────────
 
@@ -94,22 +119,30 @@ terraform-plan:
   needs: ["offline-tests"]
   before_script:
     - *install_terraform
-    - *load_vault_credentials
+    - *require_vault_token
   script:
     # The solution dir, not the exercise dir: 04-terraform/main.tf ships with
-    # the module 4 deliberate error (TODO 2.1) for students to fix, so CI
-    # against it would fail forever by design.
+    # the module 4 deliberate errors (TODO 2.1, TODO 4.1) for students to fix,
+    # so CI against it would fail forever by design.
     - cd 04-terraform/solution
+    # No -backend-config flags: the TF_HTTP_* variables above already are the
+    # backend configuration.
     - terraform init -input=false
     - terraform plan -input=false -out=tfplan
     # The human-readable plan is the review artifact: it is what a reviewer
     # reads on the MR to answer "what exactly is going to change?".
     - terraform show -no-color tfplan > ../../plan.txt
     - cat ../../plan.txt
+    # And the binary plan does NOT leave this container. Terraform persists
+    # every data source it reads into the plan file, and PART B has it read
+    # the Manager credentials out of Vault — so tfplan is a secret, while
+    # `terraform show` redacts it to "(sensitive value)". Job artifacts are
+    # downloadable by every Reporter on the project; publish the redacted
+    # one, keep the other.
+    - rm -f tfplan
   artifacts:
     paths:
       - plan.txt
-      - 04-terraform/solution/tfplan
     expire_in: 1 week
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -121,13 +154,16 @@ apply-and-verify:
   stage: apply
   needs: ["terraform-plan"]
   environment:
+    # No `url:` — the Manager address is in Vault now, and a job-level key
+    # cannot read something a script exported.
     name: fabric-lab
-    url: $VMANAGE_URL
   before_script:
     - *install_terraform
-    - *load_vault_credentials
+    - *require_vault_token
     - pip install -q -e .
   script:
+    # Same backend, same state as the plan job — which is the entire reason
+    # the state moved to GitLab.
     - cd 04-terraform/solution && terraform init -input=false && cd ../..
     # precheck → apply → postcheck → rollback.
     # Exits 1 on regression, having already rolled back. That exit code is
@@ -149,11 +185,25 @@ apply-and-verify:
       allow_failure: false
 
 # ─────────────────────────────────────────────────────────────────────
+# Where to look when state misbehaves
+#
+#   Operate → Terraform states      serial number, size, who locked it
+#
+# A job killed mid-apply leaves the lock held. GitLab shows it, and you
+# remove it deliberately — after confirming no apply is still running:
+#
+#   terraform force-unlock <LOCK_ID>
+#
+# "Deliberately" is the operative word. A lock you break while someone else
+# is applying is two writers on one fabric, which is the failure mode the
+# lock existed to prevent.
+# ─────────────────────────────────────────────────────────────────────
 # Upgrade path: JWT instead of a static token
 #
 # The static VAULT_TOKEN above is the version that works everywhere. The
 # better version has GitLab prove its own identity to Vault, so there is no
-# long-lived token to leak or rotate at all:
+# long-lived token to leak or rotate at all — the same trick CI_JOB_TOKEN
+# already pulls for the state backend:
 #
 #   apply-and-verify:
 #     id_tokens:
