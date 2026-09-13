@@ -24,8 +24,8 @@ provider "registry.terraform.io/ciscodevnet/sdwan" {
 }
 
 provider "registry.terraform.io/hashicorp/vault" {
-  version     = "4.8.0"
-  constraints = "~> 4.3"
+  version     = "5.11.0"
+  constraints = "~> 4.8"
   hashes = [
     "h1:aHqgWQhDBMeZO9iUKwJYMlh4q+xNMUlMIcjRbF4d02Y=",
     "zh:269ab13433f67684012ae7e15876532b0312f5d0d2002a9cf9febb1279ce5ea6",
