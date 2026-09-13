@@ -54,6 +54,19 @@ variable "vault_address" {
   default     = "https://vault.autonetops.com"
 }
 
+variable "vault_username" {
+  description = "Vault username. VAULT_USERNAME overrides it for the provider."
+  type        = string
+  default     = null
+}
+
+variable "vault_password" {
+  description = "Vault password. VAULT_PASSWORD overrides it for the provider."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "vault_mount" {
   description = "KV v2 mount holding the Manager secret."
   type        = string

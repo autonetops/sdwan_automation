@@ -10,19 +10,6 @@
 # Nothing else is exported, nothing else can be forgotten.
 # ─────────────────────────────────────────────────────────────────────
 
-provider "vault" {
-  address = var.vault_address
-
-  # No `token` here. The provider reads VAULT_TOKEN from the environment,
-  # which is the only place a token should ever be. Putting it in a variable
-  # means it lands in a .tfvars file, and a .tfvars file lands in a commit.
-
-  # By default this provider spends your token to mint a short-lived child
-  # token — which needs the `auth/token/create` capability. The bootcamp
-  # token is read-only and does NOT have it, so the default fails with a 403
-  # that says nothing about why. Use the token as issued.
-  skip_child_token = true
-}
 
 # ── TASK 4 ──────────────────────────────────────────────────────────
 # The KV **v2** data source. The exercise ships `vault_kv_secret`, which is

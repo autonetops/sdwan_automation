@@ -30,13 +30,3 @@ terraform {
   # The backend is declared in backend.tf, empty, and configured at init
   # time — a partial configuration. See that file for why.
 }
-
-# Note what this block does NOT contain: a credential. It contains a
-# reference to one. `local.manager` is resolved in vault.tf, and which way
-# it resolves is the whole of PART B.
-provider "sdwan" {
-  url      = local.manager.url
-  username = local.manager.username
-  password = local.manager.password
-  insecure = true # lab with a self-signed certificate
-}
