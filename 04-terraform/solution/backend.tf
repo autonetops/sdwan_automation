@@ -34,6 +34,6 @@
 # ⚠️ Reading this directory without GitLab credentials? `terraform init
 #    -backend=false` initialises the providers and skips the backend, which
 #    is enough for `terraform validate` and `terraform providers schema`.
-terraform {
-  backend "http" {}
-}
+#terraform {
+#  backend "http" {}
+#}

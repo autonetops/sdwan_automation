@@ -58,29 +58,41 @@ variable "vault_address" {
   default     = "https://vault.autonetops.com"
 }
 
+# Leave both null to authenticate with VAULT_TOKEN, which is what the lab
+# expects. Set them — TF_VAR_vault_username / TF_VAR_vault_password, or this
+# file — only if your Vault hands out a userpass login instead of a token.
+# A bare VAULT_USERNAME in the shell does NOT reach here: Terraform reads
+# TF_VAR_* and nothing else, and the provider's userpass block has no env
+# default of its own.
+
 variable "vault_username" {
-  description = "Vault username. VAULT_USERNAME overrides it for the provider."
+  description = "Vault userpass username. Null → authenticate with VAULT_TOKEN."
   type        = string
   default     = null
 }
 
 variable "vault_password" {
-  description = "Vault password. VAULT_PASSWORD overrides it for the provider."
+  description = "Vault userpass password. Required when vault_username is set."
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = var.vault_username == null || var.vault_password != null
+    error_message = "vault_username is set, so vault_password must be too (export TF_VAR_vault_password)."
+  }
 }
 
 variable "vault_mount" {
   description = "KV v2 mount holding the Manager secret."
   type        = string
-  default     = "secret"
+  default     = "workshop"
 }
 
 variable "vault_secret_path" {
   description = "Path of the secret INSIDE the mount — no mount prefix, no /data."
   type        = string
-  default     = "sdwan/manager"
+  default     = null
 }
 
 # ── The rest ────────────────────────────────────────────────────────

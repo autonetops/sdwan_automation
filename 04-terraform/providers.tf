@@ -9,8 +9,9 @@ provider "sdwan" {
 }
 
 provider "vault" {
-  address = var.vault_address
+  address          = var.vault_address
   skip_child_token = true
+
   auth_login_userpass {
     username = var.vault_username
     password = var.vault_password
