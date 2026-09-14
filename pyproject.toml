@@ -18,6 +18,16 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "responses>=0.25"]
 
+[project.optional-dependencies]
+nornir = [
+    "nornir==3.5.0",
+    "nornir-netmiko==1.0.1",
+    "nornir-napalm==0.5.0",
+    "nornir-scrapli==2025.1.30",
+    "nornir-jinja2==0.2.0",
+    "nornir-utils==0.2.0"
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
