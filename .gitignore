@@ -18,7 +18,7 @@ snapshots/
 tfplan
 crash.log
 
-# Backend configuration (module 4, PART C). Addresses would be harmless, but
+# Backend configuration (module 5, PART C). Addresses would be harmless, but
 # this is the file people paste a personal access token into — so it never
 # gets the chance to be committed. The example stays.
 backend.hcl

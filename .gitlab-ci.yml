@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────
 # Validated change pipeline for the Catalyst SD-WAN fabric
 #
-# The module 5 exercise, running for real — on top of module 4's PART B
+# The module 6 exercise, running for real — on top of module 5's PART B
 # (credentials from Vault) and PART C (state in GitLab).
 #
 # Note the shape: merge requests only get offline tests + `terraform plan`
@@ -9,11 +9,16 @@
 # happens on the default branch, and it is MANUAL. Good automation is not the
 # kind that applies fastest. It is the kind that errs toward the safe side.
 #
-# Required CI/CD variable (Settings → CI/CD → Variables):
-#   VAULT_TOKEN   masked + protected. That is the whole list.
+# Required CI/CD variables (Settings → CI/CD → Variables):
+#   VAULT_USERNAME   protected — the CI service account's Vault login
+#   VAULT_PASSWORD   masked + protected
+#
+# That is the whole list. Vault authenticates with userpass (same method the
+# students use, different account), and the job exchanges it for a
+# short-lived token that Terraform's vault provider can speak.
 #
 # Nothing else is stored in GitLab. Terraform reads the Manager credentials
-# from Vault itself (04-terraform/solution/vault.tf) and the Python toolkit
+# from Vault itself (05-terraform/solution/vault.tf) and the Python toolkit
 # does the same through sdwan_toolkit.vault.load_credentials(). State
 # authenticates with the job's own CI_JOB_TOKEN, which GitLab mints and
 # revokes around each job — there is no state secret to store at all.
@@ -31,8 +36,8 @@ variables:
   # Read by the Python toolkit (hvac) and, as TF_VAR_*, by the Terraform
   # vault provider. Addresses, not secrets — the token is the CI/CD variable.
   VAULT_ADDR: "https://vault.autonetops.com"
-  VAULT_SDWAN_MOUNT: "secret"
-  VAULT_SDWAN_PATH: "sdwan/manager"
+  VAULT_SDWAN_MOUNT: "workshop"
+  VAULT_SDWAN_PATH: "sdwan"
 
   TERRAFORM_VERSION: "1.9.8"
   TF_IN_AUTOMATION: "true"
@@ -47,7 +52,7 @@ variables:
   TF_VAR_vault_secret_path: "${VAULT_SDWAN_PATH}"
 
   # ── Terraform state, served by GitLab ─────────────────────────────
-  # Module 4 PART C. backend.tf declares `backend "http" {}` and nothing
+  # Module 5 PART C. backend.tf declares `backend "http" {}` and nothing
   # else; every argument arrives here as TF_HTTP_*, which is what makes one
   # config usable from a laptop and from a pipeline at the same time.
   #
@@ -86,16 +91,32 @@ default:
   - unzip -o -q /tmp/tf.zip -d /usr/local/bin
   - terraform version
 
-# The only credential check worth doing up front. Everything downstream —
-# Terraform's vault provider, the toolkit's hvac client — fails with a
-# clearer message if the token is simply absent, so catch that here.
-.require_vault_token: &require_vault_token
+# Log in to Vault once, up front. Two things come out of it:
+#
+#   - the Python toolkit reads VAULT_USERNAME / VAULT_PASSWORD directly
+#     (sdwan_toolkit.vault does userpass itself, via hvac);
+#   - Terraform's vault provider speaks tokens and not userpass, so we
+#     exchange the login for a short-lived token here.
+#
+# Doing it up front means a bad credential fails in five seconds with a clear
+# message, instead of thirty lines into a terraform plan.
+.vault_login: &vault_login
   - |
-    if [ -z "${VAULT_TOKEN:-}" ]; then
-      echo "VAULT_TOKEN is not set. Add it as a masked, protected CI/CD variable." >&2
+    if [ -z "${VAULT_USERNAME:-}" ] || [ -z "${VAULT_PASSWORD:-}" ]; then
+      echo "VAULT_USERNAME / VAULT_PASSWORD are not set. Add them as" >&2
+      echo "protected CI/CD variables (the password masked as well)." >&2
       exit 1
     fi
-    echo "Vault token present; ${VAULT_ADDR} will be read at plan time."
+    VAULT_TOKEN="$(curl -sS --fail --request POST \
+      --data "{\"password\":\"${VAULT_PASSWORD}\"}" \
+      "${VAULT_ADDR}/v1/auth/userpass/login/${VAULT_USERNAME}" \
+      | jq -r '.auth.client_token')"
+    if [ -z "${VAULT_TOKEN}" ] || [ "${VAULT_TOKEN}" = "null" ]; then
+      echo "Vault rejected the CI login for ${VAULT_USERNAME}." >&2
+      exit 1
+    fi
+    export VAULT_TOKEN
+    echo "Authenticated to ${VAULT_ADDR} as ${VAULT_USERNAME}."
 
 # ── stage: test ─────────────────────────────────────────────────────
 
@@ -119,12 +140,12 @@ terraform-plan:
   needs: ["offline-tests"]
   before_script:
     - *install_terraform
-    - *require_vault_token
+    - *vault_login
   script:
-    # The solution dir, not the exercise dir: 04-terraform/main.tf ships with
-    # the module 4 deliberate errors (TODO 2.1, TODO 4.1) for students to fix,
+    # The solution dir, not the exercise dir: 05-terraform/main.tf ships with
+    # the module 5 deliberate errors (TODO 2.1, TODO 4.1) for students to fix,
     # so CI against it would fail forever by design.
-    - cd 04-terraform/solution
+    - cd 05-terraform/solution
     # No -backend-config flags: the TF_HTTP_* variables above already are the
     # backend configuration.
     - terraform init -input=false
@@ -159,16 +180,16 @@ apply-and-verify:
     name: fabric-lab
   before_script:
     - *install_terraform
-    - *require_vault_token
+    - *vault_login
     - pip install -q -e .
   script:
     # Same backend, same state as the plan job — which is the entire reason
     # the state moved to GitLab.
-    - cd 04-terraform/solution && terraform init -input=false && cd ../..
+    - cd 05-terraform/solution && terraform init -input=false && cd ../..
     # precheck → apply → postcheck → rollback.
     # Exits 1 on regression, having already rolled back. That exit code is
     # what fails this job.
-    - python 05-pipeline/solution/pipeline.py
+    - python 06-pipeline/solution/pipeline.py
   after_script:
     # `after_script` runs even when the job fails — which is exactly when the
     # snapshots matter most.

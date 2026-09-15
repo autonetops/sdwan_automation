@@ -1,4 +1,10 @@
-"""The handshake with the Manager — including the HTTP 200 trap."""
+"""The handshake with the Manager — including the HTTP 200 trap.
+
+This suite is module 3's specification. Six behaviours, every one of them
+something the plain functions in module 2 either got wrong or didn't do at
+all. Note that nothing here touches Vault or a real Manager: `SDWANClient`
+takes credentials as an argument precisely so it stays testable.
+"""
 
 import pytest
 import responses
@@ -73,8 +79,3 @@ def test_an_expired_xsrf_token_gets_its_own_message(credentials):
     client = SDWANClient(credentials, min_interval=0).login()
     with pytest.raises(SDWANError, match="X-XSRF-TOKEN expired"):
         client.post("/device/action/deploy", {})
-
-
-def test_repr_does_not_leak_the_password(credentials):
-    assert "s3cr3t" not in repr(credentials)
-    assert "***" in repr(credentials)

@@ -11,21 +11,28 @@ vocabulary. The sentence that sums up the day:
 
 ## The arc
 
-You don't do five disconnected exercises. You build **one tool**, layer by
+You don't do six disconnected exercises. You build **one tool**, layer by
 layer, and you leave with it working.
 
 | Module | Time | Automation | SD-WAN |
 |---|---|---|---|
-| [01 — Connecting to the Manager](01-connecting-to-manager/) | 45 min | HTTP sessions, secrets out of code | `j_security_check` + `X-XSRF-TOKEN` handshake |
-| [02 — State as data](02-operational-state/) | 50 min | Modelling, snapshots, diffing | Control connections, BFD, OMP, app-route |
-| [03 — Config Groups](03-config-groups/) | 50 min | Idempotency, async tasks, dry-run | Feature profiles, parcels, deploy |
-| [04 — Terraform](04-terraform/) | 45 min + 30 | Declarative, state, drift, secrets Terraform fetches itself, state in GitLab | Config group as code |
-| [05 — Pipeline](05-pipeline/) | 30 min | CI/CD, verification, rollback | Fabric pre/post checks |
+| [01 — Credentials out of the code](01-vault-credentials/) | 30 min | Secrets management, validation at the boundary | Vault userpass, the KV v2 double envelope |
+| [02 — Connecting to the Manager](02-connecting-to-manager/) | 30 min | HTTP sessions and cookie jars | `j_security_check` + `X-XSRF-TOKEN` handshake |
+| [03 — From functions to a client](03-building-the-client/) | 35 min | Encapsulation, context managers, one choke point | Rate limiting a shared Manager, the `data` envelope |
+| [04 — Change the fabric, and prove it](04-change-and-verify/) | 50 min | Snapshots, async tasks, an opinionated diff | Config groups, preview, deploy, BFD/OMP/control |
+| [05 — Terraform](05-terraform/) | 45 min + 30 | Declarative, state, drift, secrets Terraform fetches itself, state in GitLab | Config group as code |
+| [06 — Pipeline](06-pipeline/) | 30 min | CI/CD, verification, rollback | Fabric pre/post checks |
 
 The remaining 20 minutes are for the opening, a break and the wrap-up. That's
 deliberate.
 
-Module 4 carries a `+ 30`: PART A is the 45-minute core, and PARTS B and C —
+**Modules 1 to 3 are the toolkit you build.** Module 1 produces
+`sdwan_toolkit/vault.py`, module 2 produces working handshake code, and module
+3 refactors it into `sdwan_toolkit/client.py`. Everything after that is
+written *on top of* what you wrote — which is why `state.py`, `tasks.py` and
+`configgroup.py` are each under 170 lines.
+
+Module 5 carries a `+ 30`: PART A is the 45-minute core, and PARTS B and C —
 credentials fetched from Vault, state moved to GitLab — are ~15 minutes each.
 Run them in the room if the day is going quickly, hand them over as the
 take-home if it isn't. They're the two steps between "it worked on my laptop"
@@ -47,27 +54,32 @@ python -m pytest -q
 ### Credentials
 
 They live in **HashiCorp Vault** (`https://vault.autonetops.com`), never in the
-repository. You get a read-only token at the start of the bootcamp.
+repository. You get a personal, read-only **userpass** login at the start of
+the bootcamp.
 
 ```bash
 export VAULT_ADDR=https://vault.autonetops.com
-export VAULT_TOKEN=hvs.xxxxxxxx     # handed out by the instructor
+export VAULT_USERNAME=ws07          # handed out by the instructor
+export VAULT_PASSWORD=...
 export WS_STUDENT=07                # your number — prefixes everything you create
-
-source scripts/vault-env.sh         # exports VMANAGE_* and TF_VAR_*
 ```
 
-The secret lives at `secret/sdwan/manager` with the keys `url`, `username` and
-`password`. All the code reads it through one function:
-`sdwan_toolkit.vault.load_credentials()`.
+The secret lives at `workshop/sdwan` with the keys `url`, `username` and
+`password`. All the Python reads it through one function:
+`sdwan_toolkit.vault.load_credentials()` — which is module 1's deliverable.
 
-From module 4 PART B onward, Terraform stops being handed the credentials and
-goes and gets them — so `TF_VAR_vmanage_*` disappears and `VAULT_TOKEN` is the
-only secret left in your shell.
+Terraform can't call that function, so PART A of module 5 uses
+`source scripts/vault-env.sh` to export `TF_VAR_vmanage_*`. From module 5
+PART B onward Terraform fetches the secret itself, and those variables
+disappear again.
 
 > **Why Vault and not a `.env`?** Because today's `.env` is tomorrow's
-> accidental commit. And because revoking a token is instant, while changing a
+> accidental commit. And because revoking a login is instant, while changing a
 > password that eighteen people copied is not.
+>
+> There is deliberately **no `VMANAGE_URL` fallback**. A fallback is a door,
+> and a door that exists "only for CI" is a door someone eventually uses on a
+> laptop. Module 1 makes the argument properly.
 
 ## The lab is shared
 
@@ -91,6 +103,8 @@ plane, with no VPN.
 
 ```bash
 python -m pytest -q                      # everything
+python -m pytest tests/test_vault.py -q  # module 1
+python -m pytest tests/test_client.py -q # module 3 — this suite is the spec
 python -m pytest tests/test_diff.py -q   # just the judge of the change
 ```
 
@@ -98,14 +112,18 @@ python -m pytest tests/test_diff.py -q   # just the judge of the change
 
 ```
 sdwan_toolkit/
-├── vault.py        credentials (module 1)
-├── client.py       authenticated session + rate limiting (module 1)
-├── inventory.py    who is who in the fabric (module 1)
-├── state.py        operational snapshot (module 2)
-├── diff.py         the judge of the change (module 2)
-├── tasks.py        asynchronous task polling (module 3)
-└── configgroup.py  declarative change (module 3)
+├── vault.py        credentials                          ← YOU BUILD THIS (module 1)
+├── client.py       authenticated session + rate limiting ← YOU BUILD THIS (module 3)
+├── inventory.py    who is who in the fabric             (module 3)
+├── state.py        operational snapshot                 (module 4)
+├── diff.py         the judge of the change              (module 4)
+├── tasks.py        asynchronous task polling            (module 4)
+└── configgroup.py  declarative change                   (module 4)
 ```
+
+The two marked files are the ones you write. The rest are given, and they are
+short because those two exist — which is the argument for building them by
+hand rather than importing someone else's SDK on slide one.
 
 ## CI/CD
 
@@ -116,9 +134,11 @@ into:
   tests and a `terraform plan`; the apply is default-branch-only and **manual**.
   Terraform state is served by GitLab (Operate → Terraform states), so `plan`
   and `apply` — separate jobs, separate containers — share one locked state.
-  Requires one masked, protected CI/CD variable: `VAULT_TOKEN`. The state
-  backend authenticates with the job's own `CI_JOB_TOKEN`, so there's nothing
-  else to store.
+  Requires two protected CI/CD variables — `VAULT_USERNAME` and a masked
+  `VAULT_PASSWORD` — for a CI service account. The job exchanges them for a
+  short-lived Vault token that Terraform can speak; the Python side does its
+  own userpass login. The state backend authenticates with the job's own
+  `CI_JOB_TOKEN`, so there's nothing else to store.
 - `.github/workflows/change-validation.yml` — the same shape with GitHub
   Actions, gated by a `fabric-lab` environment. It runs without the GitLab
   state backend (that runner has no credentials for it), which is precisely

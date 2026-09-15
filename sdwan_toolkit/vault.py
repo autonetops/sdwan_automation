@@ -5,77 +5,92 @@ Git history, and don't live in your `~/.bash_history`. In this bootcamp they
 live in Vault (`https://vault.autonetops.com`) and reach your script through
 exactly one function: `load_credentials()`.
 
-Auth method: token. You get a read-only token at the start of the bootcamp
-and export it as `VAULT_TOKEN`.
+Auth method: **userpass**. You get a personal, read-only Vault login at the
+start of the bootcamp:
 
     export VAULT_ADDR=https://vault.autonetops.com
-    export VAULT_TOKEN=hvs.XXXXXXXXXXXX
+    export VAULT_USERNAME=ws07
+    export VAULT_PASSWORD=...
 
-Fallback: if `VAULT_TOKEN` is unset, we fall back to `VMANAGE_URL` /
-`VMANAGE_USERNAME` / `VMANAGE_PASSWORD`. That exists for offline development
-and for the CI pipeline — never for your laptop.
+Note what is *not* here: no fallback to `VMANAGE_URL` / `VMANAGE_USERNAME` /
+`VMANAGE_PASSWORD`. A fallback is a door, and a door people use once in CI is
+a door someone eventually uses on a laptop. One source of truth, or none.
+
+This module is module 1's deliverable — you build it before anything else,
+because every other module starts by calling `load_credentials()`.
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+
+import hvac
+from pydantic import BaseModel
 
 DEFAULT_VAULT_ADDR = "https://vault.autonetops.com"
-DEFAULT_MOUNT = "secret"
-DEFAULT_PATH = "sdwan/manager"
+DEFAULT_MOUNT = "workshop"
+DEFAULT_PATH = "sdwan"
 
 
 class CredentialsError(RuntimeError):
-    """Credentials could not be obtained from Vault or from the environment."""
+    """Credentials could not be obtained from Vault."""
 
 
-@dataclass(frozen=True)
-class ManagerCredentials:
-    """Manager address and login. Immutable on purpose."""
+class ManagerCredentials(BaseModel):
+    """Manager address and login.
+
+    A model rather than a dict, for one reason worth more than the typing:
+    pydantic validates at the boundary. If Vault ever hands back a secret with
+    a missing or wrongly-typed field, you find out *here*, with a clear error,
+    and not four calls later inside an HTTP request.
+    """
 
     url: str
     username: str
     password: str
 
     def __repr__(self) -> str:  # pragma: no cover - debugging convenience
-        # Never let the password leak into a traceback or a log line.
+        # Never let the password leak into a traceback, a log line or a
+        # pytest failure report. This is not paranoia: `print(creds)` during
+        # debugging is how secrets end up pasted into chat.
         return f"ManagerCredentials(url={self.url!r}, username={self.username!r}, password='***')"
 
-
-def _from_env() -> ManagerCredentials | None:
-    url = os.getenv("VMANAGE_URL")
-    username = os.getenv("VMANAGE_USERNAME")
-    password = os.getenv("VMANAGE_PASSWORD")
-    if url and username and password:
-        return ManagerCredentials(url=url.rstrip("/"), username=username, password=password)
-    return None
+    __str__ = __repr__
 
 
 def _from_vault() -> ManagerCredentials | None:
-    token = os.getenv("VAULT_TOKEN")
-    if not token:
-        return None
+    """Log in to Vault with userpass and read the Manager secret.
 
-    try:
-        import hvac
-    except ImportError as exc:  # pragma: no cover
-        raise CredentialsError(
-            "VAULT_TOKEN is set but the 'hvac' package is not installed. "
-            "Run: pip install hvac"
-        ) from exc
+    Returns None when there is no `VAULT_PASSWORD` in the environment — that
+    is "not configured", not "failed", and `load_credentials()` turns it into
+    the error message the student actually needs.
+    """
+    username = os.getenv("VAULT_USERNAME")
+    password = os.getenv("VAULT_PASSWORD")
+    if not password:
+        return None
 
     addr = os.getenv("VAULT_ADDR", DEFAULT_VAULT_ADDR)
     mount = os.getenv("VAULT_SDWAN_MOUNT", DEFAULT_MOUNT)
     path = os.getenv("VAULT_SDWAN_PATH", DEFAULT_PATH)
 
-    client = hvac.Client(url=addr, token=token)
+    # verify=False: the lab Vault uses a self-signed certificate. In
+    # production this is a security bug, not a convenience.
+    client = hvac.Client(url=addr, verify=False)
+    try:
+        client.auth.userpass.login(username=username, password=password)
+    except Exception as exc:
+        raise CredentialsError(f"Vault login failed at {addr} as {username!r}: {exc}") from exc
+
     if not client.is_authenticated():
         raise CredentialsError(
-            f"Token rejected by {addr}. Has it expired? Ask the instructor for a new one."
+            f"Vault at {addr} rejected the login for {username!r}. "
+            "Check VAULT_USERNAME / VAULT_PASSWORD, or ask the instructor."
         )
 
-    # KV v2: the useful payload sits at data["data"]["data"].
+    # KV v2: the useful payload sits at data["data"]["data"]. The outer
+    # envelope is the API response, the inner one is the secret's own version
+    # wrapper. Everyone trips over this exactly once.
     secret = client.secrets.kv.v2.read_secret_version(
         path=path, mount_point=mount, raise_on_deleted_version=True
     )
@@ -88,22 +103,25 @@ def _from_vault() -> ManagerCredentials | None:
         )
 
     return ManagerCredentials(
-        url=data["url"].rstrip("/"),
+        url=data["url"].strip().rstrip("/"),
         username=data["username"],
         password=data["password"],
     )
 
 
 def load_credentials() -> ManagerCredentials:
-    """Return the Manager credentials: Vault first, environment second.
+    """Return the Manager credentials from Vault.
+
+    The single entry point every module uses. Nothing else in the toolkit
+    reads a credential environment variable.
 
     Raises:
-        CredentialsError: when neither source is usable.
+        CredentialsError: when Vault is not configured or not usable.
     """
-    creds = _from_vault() or _from_env()
+    creds = _from_vault()
     if creds is None:
         raise CredentialsError(
-            "No credentials. Export VAULT_TOKEN (recommended) or the trio "
-            "VMANAGE_URL / VMANAGE_USERNAME / VMANAGE_PASSWORD."
+            "No credentials. Export VAULT_USERNAME and VAULT_PASSWORD "
+            "(and VAULT_ADDR if your Vault is not the bootcamp default)."
         )
     return creds

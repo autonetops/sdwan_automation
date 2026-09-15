@@ -1,6 +1,6 @@
 """The Manager's asynchronous task model.
 
-This is *the* automation lesson of module 3. Writing to the Manager is almost
+This is *the* automation lesson of module 4. Writing to the Manager is almost
 never synchronous: you POST, you receive an `id`, and the change happens
 later. If your script doesn't wait, it lies — it reports success before the
 fabric has changed (or before it has failed).

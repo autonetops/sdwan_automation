@@ -1,6 +1,6 @@
-"""INSTRUCTOR ONLY — seed per-student config groups for module 3.
+"""INSTRUCTOR ONLY — seed per-student config groups for module 4.
 
-Module 3 expects each student to find a config group named `ws<NN>-…` that
+Module 4 expects each student to find a config group named `ws<NN>-…` that
 already has a device associated. A device can belong to only ONE config
 group, so seeding a student means MOVING one edge out of its site group and
 into the student's group. This script does that move — and reverts it.
@@ -24,9 +24,9 @@ further Manager behaviours this script is shaped around:
   - The variables GET answers `family`; the PUT demands `solution`
     (set_device_variables handles the rename).
 
-Run with the admin credentials from Vault (the same `secret/sdwan/manager`):
+Run with the admin credentials from Vault (the same `workshop/sdwan` secret):
 
-    export VAULT_ADDR=... VAULT_TOKEN=...        # instructor token
+    export VAULT_ADDR=... VAULT_USERNAME=... VAULT_PASSWORD=...   # instructor login
     python scripts/seed_student_groups.py --list
     python scripts/seed_student_groups.py --seed 01 --site CG_SITE101 --device cedge1-101
     python scripts/seed_student_groups.py --revert 01

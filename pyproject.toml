@@ -3,7 +3,7 @@ name = "sdwan-automation"
 version = "1.0.0"
 description = "Cisco Catalyst SD-WAN automation bootcamp — AutoNetOps"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "requests>=2.31",
     "urllib3>=2.0",
@@ -13,6 +13,7 @@ dependencies = [
     "ipython>=8.18",
     "ipdb>=0.13",
     "pytest>=8.0",
+    "pydantic>=2.13.5",
 ]
 
 [project.optional-dependencies]

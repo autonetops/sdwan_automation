@@ -1,12 +1,12 @@
 name: Fabric change validation
 
-# The module 5 pipeline, running for real on GitHub.
+# The module 6 pipeline, running for real on GitHub.
 # The GitLab equivalent lives in .gitlab-ci.yml — the repo carries both so it
 # works whichever forge you import it into.
 
 on:
   pull_request:
-    paths: ["04-terraform/**", "sdwan_toolkit/**", "05-pipeline/**"]
+    paths: ["05-terraform/**", "sdwan_toolkit/**", "06-pipeline/**"]
   push:
     branches: [main]
   workflow_dispatch:
@@ -14,7 +14,12 @@ on:
 env:
   VAULT_ADDR: https://vault.autonetops.com
   WS_STUDENT: "00"
-  # Module 4 PART B ships two credential paths. GitLab's pipeline uses the
+  # Addresses, not secrets. Required repository secrets: VAULT_USERNAME and
+  # VAULT_PASSWORD — that is the whole list, and they are scoped to the one
+  # job that needs them rather than declared here for every job.
+  VAULT_SDWAN_MOUNT: workshop
+  VAULT_SDWAN_PATH: sdwan
+  # Module 5 PART B ships two credential paths. GitLab's pipeline uses the
   # Vault provider; here vault-action has already fetched the secret, so the
   # TF_VAR_vmanage_* path is the honest choice. This is the case the fallback
   # exists for — an environment that solved the problem before Terraform ran.
@@ -40,31 +45,33 @@ jobs:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
 
-      # Credentials never enter the repository or the logs. The only secret in
-      # GitHub is the Vault token; everything else comes from Vault.
+      # Credentials never enter the repository or the logs. The only secrets
+      # in GitHub are the Vault login; everything else comes from Vault.
       - name: Read credentials from Vault
         uses: hashicorp/vault-action@v3
         with:
           url: ${{ env.VAULT_ADDR }}
-          token: ${{ secrets.VAULT_TOKEN }}
+          method: userpass
+          username: ${{ secrets.VAULT_USERNAME }}
+          password: ${{ secrets.VAULT_PASSWORD }}
           secrets: |
-            secret/data/sdwan/manager url      | TF_VAR_vmanage_url ;
-            secret/data/sdwan/manager username | TF_VAR_vmanage_username ;
-            secret/data/sdwan/manager password | TF_VAR_vmanage_password
+            workshop/data/sdwan url      | TF_VAR_vmanage_url ;
+            workshop/data/sdwan username | TF_VAR_vmanage_username ;
+            workshop/data/sdwan password | TF_VAR_vmanage_password
 
-      # Module 4 PART C points the state at GitLab-managed Terraform state,
+      # Module 5 PART C points the state at GitLab-managed Terraform state,
       # which this runner has no credentials for. Dropping backend.tf falls
       # back to a local state file — fine for a plan, and the reason the
       # GitLab pipeline is the supported one: state that lives for the
       # length of a container is state nobody can review or lock.
-      - run: rm -f 04-terraform/solution/backend.tf
+      - run: rm -f 05-terraform/solution/backend.tf
 
-      # The solution dir, not the exercise dir: 04-terraform ships the
+      # The solution dir, not the exercise dir: 05-terraform ships the
       # deliberate errors (TODO 2.1, TODO 4.1) for students to fix.
       - run: terraform init -input=false
-        working-directory: 04-terraform/solution
+        working-directory: 05-terraform/solution
       - run: terraform plan -input=false -var "student=$WS_STUDENT"
-        working-directory: 04-terraform/solution
+        working-directory: 05-terraform/solution
 
   apply-and-verify:
     name: Apply with verification and rollback
@@ -72,6 +79,12 @@ jobs:
     needs: plan
     if: github.ref == 'refs/heads/main'
     environment: fabric-lab # requires approval before touching the fabric
+    env:
+      # Only this job runs Python against the fabric. sdwan_toolkit.vault does
+      # its own userpass login through hvac, so there is no credential-fetching
+      # step for the pipeline — it authenticates itself.
+      VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
+      VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -80,30 +93,32 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - run: pip install -e .
 
+      # Terraform can't call load_credentials(), so vault-action fetches the
+      # secret into TF_VAR_*. The Python pipeline needs no step at all: it
+      # reads VAULT_USERNAME / VAULT_PASSWORD from the job env and does its
+      # own userpass login through hvac.
       - name: Read credentials from Vault
         uses: hashicorp/vault-action@v3
         with:
           url: ${{ env.VAULT_ADDR }}
-          token: ${{ secrets.VAULT_TOKEN }}
+          method: userpass
+          username: ${{ secrets.VAULT_USERNAME }}
+          password: ${{ secrets.VAULT_PASSWORD }}
           secrets: |
-            secret/data/sdwan/manager url      | VMANAGE_URL ;
-            secret/data/sdwan/manager username | VMANAGE_USERNAME ;
-            secret/data/sdwan/manager password | VMANAGE_PASSWORD
+            workshop/data/sdwan url      | TF_VAR_vmanage_url ;
+            workshop/data/sdwan username | TF_VAR_vmanage_username ;
+            workshop/data/sdwan password | TF_VAR_vmanage_password
 
-      - name: Mirror credentials for Terraform
-        run: |
-          echo "TF_VAR_vmanage_url=$VMANAGE_URL"           >> "$GITHUB_ENV"
-          echo "TF_VAR_vmanage_username=$VMANAGE_USERNAME" >> "$GITHUB_ENV"
-          echo "TF_VAR_vmanage_password=$VMANAGE_PASSWORD" >> "$GITHUB_ENV"
-          echo "TF_VAR_student=$WS_STUDENT"                >> "$GITHUB_ENV"
+      - name: Pass the student number to Terraform
+        run: echo "TF_VAR_student=$WS_STUDENT" >> "$GITHUB_ENV"
 
-      - run: rm -f 04-terraform/solution/backend.tf
+      - run: rm -f 05-terraform/solution/backend.tf
       - run: terraform init -input=false
-        working-directory: 04-terraform/solution
+        working-directory: 05-terraform/solution
 
       # The pipeline exits 1 on regression — having already rolled back.
       - name: Precheck → apply → postcheck → rollback
-        run: python 05-pipeline/solution/pipeline.py
+        run: python 06-pipeline/solution/pipeline.py
 
       # Snapshots stay attached to the run: evidence that the change was
       # verified, and the material to analyse when it wasn't.
