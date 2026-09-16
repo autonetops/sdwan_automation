@@ -1,35 +1,15 @@
 # ─────────────────────────────────────────────────────────────────────
 # Validated change pipeline for the Catalyst SD-WAN fabric
 #
-# The module 6 exercise, running for real — on top of module 5's PART B
-# (credentials from Vault) and PART C (state in GitLab).
-#
-# Note the shape: merge requests only get offline tests + `terraform plan`
-# (safe, runs on any MR). The apply — with verification and rollback — only
-# happens on the default branch, and it is MANUAL. Good automation is not the
-# kind that applies fastest. It is the kind that errs toward the safe side.
-#
-# Required CI/CD variables (Settings → CI/CD → Variables):
-#   VAULT_USERNAME   protected — the CI service account's Vault login
-#   VAULT_PASSWORD   masked + protected
-#
-# That is the whole list. Vault authenticates with userpass (same method the
-# students use, different account), and the job exchanges it for a
-# short-lived token that Terraform's vault provider can speak.
-#
-# Nothing else is stored in GitLab. Terraform reads the Manager credentials
-# from Vault itself (05-terraform/solution/vault.tf) and the Python toolkit
-# does the same through sdwan_toolkit.vault.load_credentials(). State
-# authenticates with the job's own CI_JOB_TOKEN, which GitLab mints and
-# revokes around each job — there is no state secret to store at all.
-#
 # One secret to rotate, one secret to revoke.
 # ─────────────────────────────────────────────────────────────────────
 
 stages:
-  - test
+  - validate
   - plan
-  - apply
+  - deploy
+  - test
+  - notify
 
 variables:
   # ── Vault ─────────────────────────────────────────────────────────
@@ -71,9 +51,6 @@ variables:
   TF_HTTP_LOCK_METHOD: "POST"
   TF_HTTP_UNLOCK_METHOD: "DELETE"
   TF_HTTP_RETRY_WAIT_MIN: "5"
-  # The job authenticates as itself. CI_JOB_TOKEN is minted when the job
-  # starts and revoked when it ends — a credential nobody has to store,
-  # rotate, or remember to revoke when someone leaves.
   TF_HTTP_USERNAME: "gitlab-ci-token"
   TF_HTTP_PASSWORD: "${CI_JOB_TOKEN}"
 
@@ -118,10 +95,10 @@ default:
     export VAULT_TOKEN
     echo "Authenticated to ${VAULT_ADDR} as ${VAULT_USERNAME}."
 
-# ── stage: test ─────────────────────────────────────────────────────
+# ── stage: validate ─────────────────────────────────────────────────────
 
-offline-tests:
-  stage: test
+offline-validate:
+  stage: validate
   # No Vault, no fabric, no network. This job must stay that way — it is the
   # one that still works when the lab is down.
   script:
