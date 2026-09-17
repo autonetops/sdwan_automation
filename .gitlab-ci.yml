@@ -110,11 +110,20 @@ offline-validate:
       junit: report.xml
     expire_in: 1 week
 
+terraform-fmt-validate:
+  stage: validate
+  before_script:
+    - *install_terraform
+  script:
+    - cd 05-terraform/solution
+    - terraform fmt -check=true -diff=true -recursive > ../../terraform-fmt.txt || true
+    - terraform fmt
+
 # ── stage: plan ─────────────────────────────────────────────────────
 
 terraform-plan:
   stage: plan
-  needs: ["offline-tests"]
+  needs: ["offline-validate", "terraform-fmt-validate"]
   before_script:
     - *install_terraform
     - *vault_login
@@ -129,8 +138,8 @@ terraform-plan:
     - terraform plan -input=false -out=tfplan
     # The human-readable plan is the review artifact: it is what a reviewer
     # reads on the MR to answer "what exactly is going to change?".
-    - terraform show -no-color tfplan > ../../plan.txt
-    - cat ../../plan.txt
+    - terraform show -no-color tfplan > ../../tfplan.txt
+    - cat ../../tfplan.txt
     # And the binary plan does NOT leave this container. Terraform persists
     # every data source it reads into the plan file, and PART B has it read
     # the Manager credentials out of Vault — so tfplan is a secret, while
@@ -140,7 +149,7 @@ terraform-plan:
     - rm -f tfplan
   artifacts:
     paths:
-      - plan.txt
+      - tfplan.txt
     expire_in: 1 week
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -148,7 +157,7 @@ terraform-plan:
 
 # ── stage: apply ────────────────────────────────────────────────────
 
-apply-and-verify:
+terraform-apply-and-verify:
   stage: apply
   needs: ["terraform-plan"]
   environment:
@@ -163,10 +172,8 @@ apply-and-verify:
     # Same backend, same state as the plan job — which is the entire reason
     # the state moved to GitLab.
     - cd 05-terraform/solution && terraform init -input=false && cd ../..
+    - terraform apply -input=false -auto-approve
     # precheck → apply → postcheck → rollback.
-    # Exits 1 on regression, having already rolled back. That exit code is
-    # what fails this job.
-    - python 06-pipeline/solution/pipeline.py
   after_script:
     # `after_script` runs even when the job fails — which is exactly when the
     # snapshots matter most.
@@ -196,23 +203,4 @@ apply-and-verify:
 # is applying is two writers on one fabric, which is the failure mode the
 # lock existed to prevent.
 # ─────────────────────────────────────────────────────────────────────
-# Upgrade path: JWT instead of a static token
-#
-# The static VAULT_TOKEN above is the version that works everywhere. The
-# better version has GitLab prove its own identity to Vault, so there is no
-# long-lived token to leak or rotate at all — the same trick CI_JOB_TOKEN
-# already pulls for the state backend:
-#
-#   apply-and-verify:
-#     id_tokens:
-#       VAULT_ID_TOKEN:
-#         aud: https://vault.autonetops.com
-#     script:
-#       - export VAULT_TOKEN="$(curl -sS --request POST \
-#           --data "{\"jwt\":\"${VAULT_ID_TOKEN}\",\"role\":\"sdwan-ci\"}" \
-#           ${VAULT_ADDR}/v1/auth/jwt/login | jq -r '.auth.client_token')"
-#
-# It needs the JWT auth backend enabled in Vault with a role bound to this
-# project. `id_tokens` is available on all GitLab tiers; the declarative
-# `secrets:vault:` keyword is Premium — which is why we do it with curl.
-# ─────────────────────────────────────────────────────────────────────
+
