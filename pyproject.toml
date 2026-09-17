@@ -14,6 +14,7 @@ dependencies = [
     "ipdb>=0.13",
     "pytest>=8.0",
     "pydantic>=2.13.5",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

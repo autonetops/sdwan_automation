@@ -17,6 +17,12 @@ snapshots/
 !*.tfvars.example
 tfplan
 crash.log
+# Rendered from 06-pipeline/data/fabric.yaml by render.py. Generated,
+# never edited by hand, never committed — the YAML is the source of truth.
+generated.auto.tfvars.json
+# Pipeline reports, written into the working directory by the CI jobs.
+tfplan.txt
+idempotency.txt
 
 # Backend configuration (module 5, PART C). Addresses would be harmless, but
 # this is the file people paste a personal access token into — so it never

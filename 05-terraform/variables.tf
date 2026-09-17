@@ -112,3 +112,28 @@ variable "banner_motd" {
   type        = string
   default     = "Managed by Terraform - AutoNetOps Bootcamp"
 }
+
+# ── Rendered from the module 6 data model ───────────────────────────
+# These arrive in generated.auto.tfvars.json, which `06-pipeline/render.py`
+# writes from data/fabric.yaml. Defaults are here so module 5 still stands on
+# its own — run it alone and you get the module 5 change, run it through the
+# pipeline and the data model wins (*.auto.tfvars.json beats everything
+# except an explicit -var).
+
+variable "banner_login" {
+  description = "Login banner text. Rendered from sdwan.system.banner.login."
+  type        = string
+  default     = "Authorized access only"
+}
+
+variable "config_group_name" {
+  description = "Bare config group name — the ws<NN>- prefix is added below, not here."
+  type        = string
+  default     = "config-group"
+}
+
+variable "config_group_description" {
+  description = "Why this group exists. Rendered from sdwan.config_group.description."
+  type        = string
+  default     = "Config group for the automation bootcamp"
+}

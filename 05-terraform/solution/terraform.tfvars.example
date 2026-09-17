@@ -26,3 +26,9 @@ banner_motd = "Managed by Terraform - AutoNetOps Bootcamp"
 
 # State settings are NOT here: a backend block cannot read variables. They
 # live in backend.hcl (laptop) or TF_HTTP_* (pipeline). See backend.tf.
+
+# ── From module 6 on, these are GENERATED ───────────────────────────
+# banner_motd, banner_login, config_group_name, config_group_description and
+# student are rendered into generated.auto.tfvars.json from
+# 06-pipeline/data/fabric.yaml. A *.auto.tfvars.json file beats this one, so
+# a value set in both places is a value that silently does not apply.
