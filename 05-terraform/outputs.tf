@@ -1,6 +1,6 @@
 output "config_group_id" {
   description = "Use this id in the module 6 exercise."
-  value       = sdwan_configuration_group.bootcamp.id
+  value       = sdwan_configuration_group.this.id
 }
 
 output "discovered_devices" {
