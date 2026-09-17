@@ -41,7 +41,7 @@
 #           and the address it is referenced by in `local.vault_manager`
 #           below. A resource's address is its type plus its name — change
 #           the type and every reference to it moves too.
-data "vault_kv_secret" "manager" {
+data "vault_kv_secret" "this" {
   count = var.credentials_from_vault ? 1 : 0
 
   path = "${var.vault_mount}/${var.vault_secret_path}" # ← TODO 4.1: v1 shape
@@ -53,7 +53,7 @@ locals {
   # idiomatic companion to `count` on a conditional data source, and it is
   # why the PART A path never touches Vault: at count = 0 the provider is
   # not even configured, so no token is required to run PART A.
-  vault_manager = one(data.vault_kv_secret.manager[*].data)
+  vault_manager = one(data.vault_kv_secret.this[*].data)
 
   manager = var.credentials_from_vault ? {
     url      = local.vault_manager["url"]

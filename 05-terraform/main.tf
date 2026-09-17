@@ -19,7 +19,7 @@
 # ─────────────────────────────────────────────────────────────────────
 
 locals {
-  prefix = "${var.student}-"
+  prefix = "${var.student}"
 }
 
 # ── Discovery ───────────────────────────────────────────────────────
@@ -33,7 +33,6 @@ locals {
   ]
 }
 
-# ── TASK 1 ──────────────────────────────────────────────────────────
 # System feature profile to hold the banner parcel.
 resource "sdwan_system_feature_profile" "this" {
   name        = "${local.prefix}-system-profile"

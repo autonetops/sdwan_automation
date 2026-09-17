@@ -43,7 +43,6 @@ locals {
   ]
 }
 
-# ── STEP 1 ──────────────────────────────────────────────────────────
 # A system feature profile to hold the banner parcel.
 resource "sdwan_system_feature_profile" "bootcamp" {
   name        = "${local.prefix}system-profile"
