@@ -1,12 +1,7 @@
-output "config_group_id" {
-  description = "Use this id in the module 6 exercise."
-  value       = sdwan_configuration_group.this.id
-}
-
-output "discovered_devices" {
-  description = "Reachable devices the data source found — no hardcoded UUIDs."
-  value       = [for d in local.reachable_devices : d.hostname]
-}
+#output "config_group_id" {
+#  description = "Use this id in the module 6 exercise."
+#  value       = sdwan_configuration_group.this.id
+#}
 
 output "prefix" {
   value = local.prefix

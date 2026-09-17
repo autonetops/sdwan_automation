@@ -22,16 +22,6 @@ locals {
   prefix = "${var.student}"
 }
 
-# ── Discovery ───────────────────────────────────────────────────────
-# A data source instead of hardcoded UUIDs.
-data "sdwan_device" "all" {}
-
-locals {
-  reachable_devices = [
-    for d in data.sdwan_device.all.devices : d
-    if d.reachability == "reachable"
-  ]
-}
 
 # System feature profile to hold the banner parcel.
 resource "sdwan_system_feature_profile" "this" {
@@ -53,11 +43,13 @@ resource "sdwan_system_banner_feature" "this" {
   feature_profile_id = sdwan_system_feature_profile.this.id
   login              = var.banner_motd
 
-  message_of_the_day = var.banner_motd # ← TODO 2.1: wrong attribute
+  motd = var.banner_motd # ← TODO 2.1: wrong attribute
 }
 
 # ── TASK 3 ──────────────────────────────────────────────────────────
 # The config group that ties the profile together.
+# Let's explore loops (lists and sets) and the `for` expression. 
+# You should create a list of config gorups in the terraform.tfvars file and use it here to create multiple config groups.
 resource "sdwan_configuration_group" "this" {
   name        = "${local.prefix}-config-group"
   description = "Config group for the automation bootcamp"

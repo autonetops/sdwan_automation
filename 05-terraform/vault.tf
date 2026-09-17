@@ -21,39 +21,20 @@
 
 # ── TASK 4 ──────────────────────────────────────────────────────────
 # Read the Manager secret out of Vault.
-#
-# TODO 4.1: this data source is the WRONG one. `vault_kv_secret` reads a
-#           KV **v1** mount; `workshop/` in this lab is KV **v2**, and the two
-#           are different APIs behind the same-looking path. Enable the
-#           toggle and run `terraform plan` — read the error before you fix
-#           anything, because that error is the one you will meet again on
-#           every Vault integration you ever build.
-#
-#           The v2 data source does not take a `path`. It takes the mount
-#           and the path within the mount, separately. Confirm the argument
-#           names the same way you confirmed the banner attribute in TASK 2:
-#
-#             terraform providers schema -json | jq '.provider_schemas
-#               | .["registry.terraform.io/hashicorp/vault"].data_source_schemas
-#               | keys'
-#
-#           Two things change when you fix this: the data source type here,
-#           and the address it is referenced by in `local.vault_manager`
-#           below. A resource's address is its type plus its name — change
-#           the type and every reference to it moves too.
-data "vault_kv_secret" "this" {
+data "vault_kv_secret_v2" "this" {
   count = var.credentials_from_vault ? 1 : 0
 
-  path = "${var.vault_mount}/${var.vault_secret_path}" # ← TODO 4.1: v1 shape
+  mount = var.vault_mount
+  name  = var.vault_secret_path
 }
 
 # ── Which credentials win ───────────────────────────────────────────
 locals {
   # `one()` turns a zero-or-one list into null-or-the-value. It is the
-  # idiomatic companion to `count` on a conditional data source, and it is
-  # why the PART A path never touches Vault: at count = 0 the provider is
+  # idiomatic companion to `use_vault` on a conditional data source, and it is
+  # why the PART A path never touches Vault: at use_vault = 0 the provider is
   # not even configured, so no token is required to run PART A.
-  vault_manager = one(data.vault_kv_secret.this[*].data)
+  vault_manager = one(data.vault_kv_secret_v2.this[*].data)
 
   manager = var.credentials_from_vault ? {
     url      = local.vault_manager["url"]
