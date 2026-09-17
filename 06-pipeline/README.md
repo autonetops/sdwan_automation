@@ -23,7 +23,16 @@ true before anyone is willing to let that happen.**
 **There is no application code in this module.** No Python, no renderer, no
 orchestrator. Terraform reads the YAML itself and Terraform's own
 preconditions and postconditions are what make the fabric able to refuse its
-own change. What you write is the pipeline and the Terraform under it.
+own change. What you write is the pipeline, and the Terraform under it:
+
+| | | |
+|---|---|---|
+| **PART A** | the pipeline | `.gitlab-ci.yml` — TODO 1 to 6 |
+| **PART B** | the verification | `terraform/` — TASK 1 to 4 |
+
+PART A is the shape: which jobs run, on which branches, and who is allowed to
+touch the fabric. PART B is the part that can say no. Do them in that order —
+PART A gives you somewhere to put PART B.
 
 ## The thesis
 
@@ -181,7 +190,39 @@ Exit code 1, in under a second, with no lab involved. That is stage 1.
 Needs [yq](https://github.com/mikefarah/yq) — one binary, and the pipeline
 installs it for you.
 
-### 2. Solve the four TASKs in `terraform/`
+### 2. PART A — write the pipeline
+
+`06-pipeline/.gitlab-ci.yml` is the repository's real pipeline with six
+pieces cut out of it. Everything else is given, comments included, because
+reading those is half the exercise.
+
+| | Where | What |
+|---|---|---|
+| **TODO 1** | `stages:` | Five correct stages, sorted alphabetically. Put them in running order. |
+| **TODO 2** | `data-model-validate` | The job's `script:`. One line, two things to get right. |
+| **TODO 3** | `plan` | `artifacts:` (what the reviewer opens) and `rules:` (MR + default branch). |
+| **TODO 4** | `deploy` | The four lines that stop this job running on every push. |
+| **TODO 5** | `test-idempotency` | Turn `terraform plan -detailed-exitcode`'s three exit codes into a verdict. |
+| **TODO 6** | `notify-*` | `on_success` vs `on_failure`, and why one job has no `needs:`. |
+
+GitLab only reads `.gitlab-ci.yml` at the **root** of the repository, so the
+exercise copy does nothing where it sits. Break it freely. Two ways to check
+your work:
+
+1. **CI Lint** — the fast loop. Open
+   `https://gitlab.autonetops.com/<your-project>/-/ci/lint`, paste the file,
+   tick *Simulate a pipeline creation*, read what it says. It catches more
+   than you would expect, stage ordering included.
+2. **Run it for real.** Settings → CI/CD → General pipelines → *CI/CD
+   configuration file*, set it to `06-pipeline/.gitlab-ci.yml`. Now your
+   version is the one that runs on every push. Set it back to empty when
+   you're done.
+
+The finished version is the root `.gitlab-ci.yml` — compare, but only after
+you've tried. Notice that comparing is even possible because the whole
+pipeline is one readable file rather than a product you configure.
+
+### 3. PART B — solve the four TASKs in `terraform/`
 
 ```bash
 cd 06-pipeline/terraform
@@ -197,8 +238,8 @@ terraform validate      # ← this will fail. On purpose.
 | **TASK 4** | `verify.tf` | The `check` block that reports without blocking. |
 
 `terraform validate` gets you through TASK 1 with no credentials at all.
-For 2, 3 and 4 you need a plan, so load your Vault token first (module 5
-PART B) and run `terraform plan`.
+For TASKs 2, 3 and 4 you need a plan, so load your Vault token first
+(module 5 PART B) and run `terraform plan`.
 
 Note the two placeholder conditions in `verify.tf` — Terraform will not even
 let you write `condition = true`:
@@ -208,7 +249,7 @@ let you write `condition = true`:
 
 Terraform is making the same argument this module is.
 
-### 3. Make a real change, on a branch
+### 4. Make a real change, on a branch
 
 ```bash
 git switch -c ws07/banner-and-targets
@@ -223,7 +264,7 @@ that last one is the visible change.
 terraform -chdir=terraform plan                           # the gate, live
 ```
 
-### 4. Push it and read the pipeline
+### 5. Push it and read the pipeline
 
 ```bash
 git commit -am "ws07: banner and targets"
@@ -248,10 +289,33 @@ is `when: manual` behind the `fabric-lab` environment. Press it.
 
 ---
 
-## The four decisions the TASKs ask for
+## The decisions these ask for
 
-They don't have one right answer. They have a **justification** — write yours
-down, in the MR description or here.
+Several TODOs and TASKs don't have one right answer. They have a
+**justification** — write yours down, in the MR description or here.
+
+### TODO 4 — `allow_failure: false` is redundant. Why write it?
+
+Because GitLab gives the same two words two different defaults depending on
+where you put them:
+
+| | default `allow_failure` |
+|---|---|
+| `when: manual` as a job keyword | `true` — the job is **optional** |
+| `when: manual` inside `rules:` | `false` — the job is **blocking** |
+
+`true` means the pipeline goes green whether or not anyone ran the job, and
+whether or not it failed: success reported for a deploy that never happened.
+This pipeline uses the `rules:` form, so the safe value is already the
+default — but nobody reading the file should have to know that to trust it,
+and a refactor that lifts `when: manual` out of `rules:` would flip it
+silently.
+
+### TODO 6 — why does `notify-failure` have no `needs:`?
+
+`needs:` ties a job to specific upstream jobs. A failure notifier tied to
+`deploy` never fires when `validate` was what failed — and the change that
+got stopped at the gate is exactly the one somebody might be waiting on.
 
 ### TASK 1 — why is there no renderer?
 
@@ -366,9 +430,11 @@ you least want a broken notifier.
 
 ```
 06-pipeline/
+├── .gitlab-ci.yml             ← YOU COMPLETE THIS (PART A, TODO 1-6)
+│                                inert where it sits; GitLab reads the root one
 ├── data/fabric.yaml           THE CHANGE. The only file you edit.
 ├── validate-data-model.sh     stage 1 — the semantic rules, in yq
-├── terraform/                 ← YOU COMPLETE THIS
+├── terraform/                 ← YOU COMPLETE THIS (PART B, TASK 1-4)
 │   ├── data_model.tf            yamldecode                      TASK 1
 │   ├── main.tf                  the change, and the gate        TASK 2
 │   ├── verify.tf                postcondition, check block      TASKS 3, 4
@@ -381,8 +447,9 @@ you least want a broken notifier.
     └── backend.tf               + GitLab state, which the pipeline needs
 ```
 
-The pipeline itself is `.gitlab-ci.yml` at the repository root, with
-`.github/workflows/change-validation.yml` as the GitHub equivalent.
+The pipeline that actually runs is `.gitlab-ci.yml` at the repository root —
+the finished version of PART A. `.github/workflows/change-validation.yml` is
+the same five stages on GitHub Actions.
 
 > Your `terraform/` and the pipeline's `solution/terraform/` both create
 > `ws<NN>-pipeline` on the same Manager, from two different states. Run one

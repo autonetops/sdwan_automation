@@ -32,9 +32,11 @@ deliberate.
 written *on top of* what you wrote — which is why `state.py`, `tasks.py` and
 `configgroup.py` are each under 170 lines.
 
-Module 6 carries a `+` for the same reason: the 30 minutes buy you one
-change all the way through the pipeline, and the extensions at the end of its
-README are the take-home.
+Module 6 carries a `+` for the same reason, and splits in two: PART A is the
+pipeline itself (`.gitlab-ci.yml`, six TODOs) and PART B is the Terraform
+that lets the fabric refuse its own change (four TASKs). PART A is the 30
+minutes; PART B and the extensions at the end of its README are the
+take-home.
 
 Module 5 carries a `+ 30`: PART A is the 45-minute core, and PARTS B and C —
 credentials fetched from Vault, state moved to GitLab — are ~15 minutes each.
