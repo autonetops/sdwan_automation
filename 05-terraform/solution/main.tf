@@ -71,7 +71,7 @@ resource "sdwan_system_banner_feature" "motd" {
   name               = "${local.prefix}banner"
   description        = "MOTD managed by Terraform"
   feature_profile_id = sdwan_system_feature_profile.bootcamp.id
-  login              = var.banner_login
+  login              = var.banner_motd
 
   motd = var.banner_motd
 }
@@ -79,8 +79,8 @@ resource "sdwan_system_banner_feature" "motd" {
 # ── STEP 3 ──────────────────────────────────────────────────────────
 # The config group that ties the profile together.
 resource "sdwan_configuration_group" "bootcamp" {
-  name        = "${local.prefix}${var.config_group_name}"
-  description = var.config_group_description
+  name        = "${local.prefix}config-group"
+  description = "Config group for the automation bootcamp"
   solution    = "sdwan"
 
   feature_profile_ids = [

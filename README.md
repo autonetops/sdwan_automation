@@ -21,7 +21,7 @@ layer, and you leave with it working.
 | [03 — From functions to a client](03-building-the-client/) | 35 min | Encapsulation, context managers, one choke point | Rate limiting a shared Manager, the `data` envelope |
 | [04 — Change the fabric, and prove it](04-change-and-verify/) | 50 min | Snapshots, async tasks, an opinionated diff | Config groups, preview, deploy, BFD/OMP/control |
 | [05 — Terraform](05-terraform/) | 45 min + 30 | Declarative, state, drift, secrets Terraform fetches itself, state in GitLab | Config group as code |
-| [06 — Pipeline](06-pipeline/) | 30 min + | A data model with a schema, five CI stages, verification and rollback | The change as YAML, reviewed in an MR |
+| [06 — Pipeline](06-pipeline/) | 30 min + | Five CI stages, a YAML data model Terraform reads itself, verification and rollback | The change as a reviewable diff, `check` vs `postcondition` |
 
 The remaining 20 minutes are for the opening, a break and the wrap-up. That's
 deliberate.
@@ -29,8 +29,8 @@ deliberate.
 **Modules 1 to 3 are the toolkit you build.** Module 1 produces
 `sdwan_toolkit/vault.py`, module 2 produces working handshake code, and module
 3 refactors it into `sdwan_toolkit/client.py`. Everything after that is
-written *on top of* what you wrote — which is why `state.py`, `tasks.py`,
-`configgroup.py` and `datamodel.py` are each under 200 lines.
+written *on top of* what you wrote — which is why `state.py`, `tasks.py` and
+`configgroup.py` are each under 170 lines.
 
 Module 6 carries a `+` for the same reason: the 30 minutes buy you one
 change all the way through the pipeline, and the extensions at the end of its
@@ -90,10 +90,9 @@ disappear again.
 One Manager for the whole class. Two rules that aren't bureaucracy:
 
 1. **Everything you create carries the `ws<NN>-` prefix** (your `WS_STUDENT`).
-   Without it you overwrite each other's work. From module 6 on, the number
-   lives in `06-pipeline/data/fabric.yaml` instead — a rendered
-   `*.auto.tfvars.json` beats `TF_VAR_student` from the environment, which is
-   the point: the reviewed file wins.
+   Without it you overwrite each other's work. In module 6 the number moves
+   into `06-pipeline/data/fabric.yaml` instead of the environment — a value
+   nobody can review is a value nobody can catch.
 2. **Don't remove the client's rate limiter.** `/device/*` endpoints are
    real-time: the Manager queries the device across the control plane. Twenty
    people in a tight loop turn the class into an incident. The `RateLimiter`
@@ -113,7 +112,9 @@ python -m pytest -q                      # everything
 python -m pytest tests/test_vault.py -q  # module 1
 python -m pytest tests/test_client.py -q # module 3 — this suite is the spec
 python -m pytest tests/test_diff.py -q   # just the judge of the change
-python -m pytest tests/test_datamodel.py -q  # module 6 — the pipeline's gate
+
+Module 6 has no tests here, because module 6 has no code: it is Terraform
+and YAML, and `terraform validate` is its unit test.
 ```
 
 ## The toolkit
@@ -126,8 +127,7 @@ sdwan_toolkit/
 ├── state.py        operational snapshot                 (module 4)
 ├── diff.py         the judge of the change              (module 4)
 ├── tasks.py        asynchronous task polling            (module 4)
-├── configgroup.py  declarative change                   (module 4)
-└── datamodel.py    the change as reviewable data        (module 6)
+└── configgroup.py  declarative change                   (module 4)
 ```
 
 The two marked files are the ones you write. The rest are given, and they are
@@ -136,9 +136,9 @@ hand rather than importing someone else's SDK on slide one.
 
 ## CI/CD
 
-Module 6 is not a chapter about YAML — it is the module where the change stops
-being something you run and becomes something you **propose**. One file is
-edited, and five stages decide whether it reaches a router:
+Module 6 is not a chapter about YAML syntax — it is the module where the
+change stops being something you run and becomes something you **propose**.
+One file is edited, and five stages decide whether it reaches a router:
 
 ```
 data/fabric.yaml  ─▶  validate  ─▶  plan  ─▶  deploy  ─▶  test  ─▶  notify
@@ -150,10 +150,16 @@ data/fabric.yaml  ─▶  validate  ─▶  plan  ─▶  deploy  ─▶  test  
 | **Merge request** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Default branch** | ✅ | ✅ | ✅ *manual* | ✅ | ✅ |
 
-`validate` — the data model's schema and semantic rules, the offline test
-suite, `terraform fmt -check` — touches no Vault, no Manager and no network.
-That is deliberate: it is the gate that still works on the day the thing it
-is gating is down.
+There is **no application code in the pipeline**. Terraform reads the YAML
+data model itself (`yamldecode`), and Terraform's own `precondition` and
+`postcondition` blocks are what let the fabric fail its own change — a
+`check` block would not, because checks only ever produce warnings. That
+distinction is the thing module 6 exists to teach.
+
+`validate` — the data model's semantic rules in `yq`, `terraform validate`,
+`terraform fmt -check`, and the offline test suite for the modules 1–4
+toolkit — touches no Vault, no Manager and no network. That is deliberate:
+it is the gate that still works on the day the thing it is gating is down.
 
 The repo ships both pipelines, so it works on whichever forge you import it
 into:
@@ -165,9 +171,9 @@ into:
   protected CI/CD variables — `VAULT_USERNAME` and a masked `VAULT_PASSWORD` —
   for a CI service account, plus `SLACK_WEBHOOK_URL` if you want the notify
   stage (it is skipped while unset). The job exchanges the login for a
-  short-lived Vault token that Terraform can speak; the Python side does its
-  own userpass login. The state backend authenticates with the job's own
-  `CI_JOB_TOKEN`, so there's nothing else to store.
+  short-lived Vault token that Terraform can speak. The state backend
+  authenticates with the job's own `CI_JOB_TOKEN`, so there's nothing else to
+  store.
 - `.github/workflows/change-validation.yml` — the same five stages with GitHub
   Actions, gated by a `fabric-lab` environment. It runs without the GitLab
   state backend (that runner has no credentials for it), which is precisely

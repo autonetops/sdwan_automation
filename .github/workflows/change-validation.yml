@@ -10,6 +10,10 @@ name: Fabric change validation
 #   feature branch        ✅   │  ❌  │   ❌   │  ❌  │   ❌
 #   pull request          ✅   │  ✅  │   ❌   │  ❌  │   ❌
 #   main                  ✅   │  ✅  │ ✅ env │  ✅  │   ✅
+#
+# No application code anywhere in it: Terraform reads the data model itself,
+# and Terraform's preconditions and postconditions are what let the fabric
+# refuse its own change.
 
 on:
   pull_request:
@@ -27,47 +31,57 @@ env:
   # Addresses, not secrets. Required repository secrets: VAULT_USERNAME and
   # VAULT_PASSWORD — that is the whole list, plus SLACK_WEBHOOK_URL if you
   # want the notify stage.
-  VAULT_SDWAN_MOUNT: workshop
-  VAULT_SDWAN_PATH: sdwan
+  TF_VAR_vault_mount: workshop
+  TF_VAR_vault_secret_path: sdwan
 
   DATA_MODEL: 06-pipeline/data/fabric.yaml
-  # 05-terraform/ ships module 5's planted errors, so CI uses the solution.
-  TF_DIR: 05-terraform/solution
+  # The solution directory: 06-pipeline/terraform ships the planted TASKs.
+  TF_DIR: 06-pipeline/solution/terraform
 
-  # Module 5 PART B ships two credential paths. GitLab's pipeline uses the
-  # Vault provider; here vault-action has already fetched the secret, so the
-  # TF_VAR_vmanage_* path is the honest choice. This is the case the fallback
-  # exists for — an environment that solved the problem before Terraform ran.
+  # vault-action fetches the secret before Terraform runs, so the
+  # TF_VAR_vmanage_* path is the honest choice here. This is the case that
+  # fallback exists for — an environment that solved the problem already.
   TF_VAR_credentials_from_vault: "false"
 
 jobs:
   # ── STAGE 1 — validate ────────────────────────────────────────────
-  # No Vault, no fabric, no network. The gate has to keep working on the day
-  # the thing it is gating is down.
+  # No Vault, no fabric, no network beyond the tools. The gate has to keep
+  # working on the day the thing it is gating is down.
 
   validate:
-    name: Validate (data model, tests, fmt)
+    name: Validate (data model, terraform, offline tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: hashicorp/setup-terraform@v3
 
-      - run: pip install -e ".[dev]"
-
-      # Schema, then semantic rules. Where a change with "CHANGEME" still in
-      # the banner stops.
-      - name: Data model
-        run: python 06-pipeline/validate.py "$DATA_MODEL"
-
-      - name: Offline tests
-        run: python -m pytest -q
+      # The MEANING of the change: placeholders, naming, empty targets.
+      # yq is preinstalled on the GitHub-hosted Ubuntu runners.
+      - name: Data model rules
+        run: ./06-pipeline/validate-data-model.sh "$DATA_MODEL"
 
       # A real gate, not a formatter that rewrites your files behind you.
       - name: Terraform fmt
-        run: terraform fmt -check -diff -recursive 05-terraform/
+        run: |
+          terraform fmt -check -diff -recursive 05-terraform/
+          terraform fmt -check -diff -recursive 06-pipeline/
+
+      # The SHAPE of the change. -backend=false means no state, no
+      # credentials — and it still decodes data/fabric.yaml and type-checks
+      # every expression that reads it.
+      - name: Terraform validate
+        run: |
+          terraform -chdir="$TF_DIR" init -backend=false -input=false
+          terraform -chdir="$TF_DIR" validate
+
+      # The toolkit from modules 1 to 4. Module 6 has no code to test.
+      - name: Offline tests
+        run: |
+          pip install -e ".[dev]"
+          python -m pytest -q
 
   # ── STAGE 2 — plan ────────────────────────────────────────────────
 
@@ -77,11 +91,7 @@ jobs:
     needs: validate
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - uses: hashicorp/setup-terraform@v3
-      - run: pip install -e .
 
       # Credentials never enter the repository or the logs. The only secrets
       # in GitHub are the Vault login; everything else comes from Vault.
@@ -97,30 +107,25 @@ jobs:
             workshop/data/sdwan username | TF_VAR_vmanage_username ;
             workshop/data/sdwan password | TF_VAR_vmanage_password
 
-      # data/fabric.yaml → generated.auto.tfvars.json. No -var flags anywhere
-      # after this: *.auto.tfvars.json is loaded automatically, which is what
-      # keeps plan and deploy from ever disagreeing.
-      - name: Render the data model
-        run: |
-          python 06-pipeline/render.py --model "$DATA_MODEL" \
-            --out "$TF_DIR/generated.auto.tfvars.json"
-          cat "$TF_DIR/generated.auto.tfvars.json"
-
-      # Module 5 PART C points the state at GitLab-managed Terraform state,
-      # which this runner has no credentials for. Dropping backend.tf falls
-      # back to a local state file — fine for a plan, and the reason the
-      # GitLab pipeline is the supported one: state that lives for the length
-      # of a container is state nobody can review or lock.
+      # backend.tf points at GitLab-managed state, which this runner has no
+      # credentials for. Deleting that one file falls back to a local state
+      # file — fine for a plan, and the reason the GitLab pipeline is the
+      # supported one: state that lives for the length of a container is
+      # state nobody can review or lock.
       - run: rm -f "$TF_DIR/backend.tf"
 
-      - run: terraform init -input=false
-        working-directory: ${{ env.TF_DIR }}
-      - run: terraform plan -input=false
-        working-directory: ${{ env.TF_DIR }}
+      - run: terraform -chdir="$TF_DIR" init -input=false
+      - run: terraform -chdir="$TF_DIR" plan -input=false
 
   # ── STAGE 3 — deploy ──────────────────────────────────────────────
   # The only job that writes to the fabric: main only, behind an environment
   # that requires approval.
+  #
+  # The verification is not here. It is a postcondition in
+  # 06-pipeline/terraform/verify.tf, on a data source that reads the fabric
+  # AFTER the change — if a target edge went unreachable, `terraform apply`
+  # fails on its own. What IS here is the one thing Terraform cannot do:
+  # decide what to do about a failure.
 
   deploy:
     name: Deploy with verification and rollback
@@ -128,30 +133,16 @@ jobs:
     needs: plan
     if: github.ref == 'refs/heads/main'
     environment: fabric-lab
-    env:
-      # Only this job runs Python against the fabric. sdwan_toolkit.vault does
-      # its own userpass login through hvac, so there is no credential-fetching
-      # step for the pipeline — it authenticates itself.
-      VAULT_USERNAME: ${{ secrets.VAULT_USERNAME }}
-      VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # The rollback reads the PREVIOUS commit of the data model
-          # (`git show HEAD~1:…`). actions/checkout defaults to a depth of 1,
-          # which has no HEAD~1 — the rollback would find nothing to roll back
-          # to, at the exact moment it matters.
+          # The rollback reads the PREVIOUS commit of the data model.
+          # actions/checkout defaults to a depth of 1, which has no HEAD~1 —
+          # the rollback would find nothing to roll back to, at the exact
+          # moment it matters.
           fetch-depth: 20
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - uses: hashicorp/setup-terraform@v3
-      - run: pip install -e .
 
-      # Terraform can't call load_credentials(), so vault-action fetches the
-      # secret into TF_VAR_*. The Python pipeline needs no step at all: it
-      # reads VAULT_USERNAME / VAULT_PASSWORD from the job env and does its
-      # own userpass login through hvac.
       - name: Read credentials from Vault
         uses: hashicorp/vault-action@v3
         with:
@@ -165,25 +156,62 @@ jobs:
             workshop/data/sdwan password | TF_VAR_vmanage_password
 
       - run: rm -f "$TF_DIR/backend.tf"
-      - run: terraform init -input=false
-        working-directory: ${{ env.TF_DIR }}
+      - run: terraform -chdir="$TF_DIR" init -input=false
 
-      # precheck → render → apply → wait → postcheck → compare → rollback?
-      # Exits 1 on regression, having already rolled back.
-      - name: Deploy and verify
-        run: python 06-pipeline/solution/pipeline.py --model "$DATA_MODEL"
+      - name: Apply, and roll back on failure
+        run: |
+          set +e
+          terraform -chdir="$TF_DIR" apply -auto-approve -input=false
+          code=$?
+          set -e
 
-      # Snapshots stay attached to the run: evidence that the change was
-      # verified, and the material to analyse when it wasn't.
-      - name: Keep the snapshots
+          if [ "$code" -eq 0 ]; then
+            echo "✓ Applied, and the postcondition in verify.tf agreed. Change kept."
+            exit 0
+          fi
+
+          echo ""
+          echo "── ROLLBACK ──"
+
+          if ! git cat-file -e "HEAD~1:${DATA_MODEL}" 2>/dev/null; then
+            echo "✗ No previous version of ${DATA_MODEL} in git." >&2
+            echo "  Nothing to roll back to. MANUAL INTERVENTION REQUIRED." >&2
+            exit 1
+          fi
+
+          # The case that looks like success and isn't: if the data model did
+          # not change in this commit, the failure did not come from this
+          # file. Re-applying it is a no-op, and reporting "rolled back"
+          # would be a lie.
+          if git diff --quiet HEAD~1 HEAD -- "${DATA_MODEL}"; then
+            echo "✗ ${DATA_MODEL} is unchanged in this commit." >&2
+            echo "  The failure did not come from the data model, so there is" >&2
+            echo "  nothing here to undo. ESCALATE — do not retry." >&2
+            exit 1
+          fi
+
+          echo "Reverting the data model to HEAD~1:"
+          git --no-pager diff HEAD HEAD~1 -- "${DATA_MODEL}"
+          git checkout HEAD~1 -- "${DATA_MODEL}"
+
+          if terraform -chdir="$TF_DIR" apply -auto-approve -input=false; then
+            echo "✓ Rolled back to the previous data model."
+          else
+            echo "✗ ROLLBACK FAILED — MANUAL INTERVENTION REQUIRED." >&2
+          fi
+          exit 1
+
+      - name: Keep the outputs
         if: always()
-        uses: actions/upload-artifact@v4
+        run: terraform -chdir="$TF_DIR" output -json > outputs.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: fabric-snapshots
-          path: snapshots/
+          name: terraform-outputs
+          path: outputs.json
 
   # ── STAGE 4 — test ────────────────────────────────────────────────
-  # Deploy proved the FABRIC is healthy. This proves the CONFIGURATION is
+  # Deploy proved the FABRIC survived. This proves the CONFIGURATION is
   # settled: the second plan must come back empty.
 
   test-idempotency:
@@ -193,11 +221,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - uses: hashicorp/setup-terraform@v3
-      - run: pip install -e .
 
       - name: Read credentials from Vault
         uses: hashicorp/vault-action@v3
@@ -211,26 +235,20 @@ jobs:
             workshop/data/sdwan username | TF_VAR_vmanage_username ;
             workshop/data/sdwan password | TF_VAR_vmanage_password
 
-      - run: |
-          python 06-pipeline/render.py --model "$DATA_MODEL" \
-            --out "$TF_DIR/generated.auto.tfvars.json"
-          rm -f "$TF_DIR/backend.tf"
+      - run: rm -f "$TF_DIR/backend.tf"
+      - run: terraform -chdir="$TF_DIR" init -input=false
 
-      - run: terraform init -input=false
-        working-directory: ${{ env.TF_DIR }}
-
-      # -detailed-exitcode is the whole job: 0 = nothing to do, 2 = there is a
-      # diff, anything else = the plan itself failed. Three different
-      # outcomes that a plain `terraform plan` collapses into one.
+      # -detailed-exitcode is the whole job: 0 = nothing to do, 2 = there is
+      # a diff, anything else = the plan itself failed. Three outcomes that a
+      # plain `terraform plan` collapses into one.
       #
       # ⚠️ Local state on this runner means this job re-creates rather than
-      #    reads the state, so it is honest only on GitLab. It is here so the
-      #    two pipelines have the same shape — see the note in the README.
+      #    reads the state, so the check is only honest on GitLab. It is here
+      #    so the two pipelines have the same shape — see the README.
       - name: Second plan must be empty
-        working-directory: ${{ env.TF_DIR }}
         run: |
           set +e
-          terraform plan -input=false -no-color -detailed-exitcode
+          terraform -chdir="$TF_DIR" plan -input=false -no-color -detailed-exitcode
           code=$?
           set -e
           case "$code" in
@@ -240,12 +258,12 @@ jobs:
           esac
 
   # ── STAGE 5 — notify ──────────────────────────────────────────────
-  # A deploy that succeeded and told nobody is fine. A deploy that FAILED and
-  # told nobody is an outage with a delay fuse on it.
+  # A deploy that succeeded and told nobody is fine. A deploy that FAILED
+  # and told nobody is an outage with a delay fuse on it.
   #
-  # Requires the repository secret SLACK_WEBHOOK_URL — ⚠️ NOT SET YET.
-  # notify.py exits 0 when it is missing, so a pipeline never fails because
-  # Slack is down.
+  # Requires the repository secret SLACK_WEBHOOK_URL — ⚠️ NOT SET YET. The
+  # job is skipped while it is missing: a pipeline that fails because Slack
+  # is down is a pipeline that teaches everyone to ignore it.
 
   notify:
     name: Notify
@@ -253,16 +271,33 @@ jobs:
     needs: [deploy, test-idempotency]
     if: always() && github.ref == 'refs/heads/main'
     env:
+      # The `secrets` context is NOT available in an `if:` condition —
+      # neither on a job nor on a step. Lifting the secret into `env` here is
+      # the documented way to make "only run this when the secret exists"
+      # expressible at all, because `env` IS available in `if:`.
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: |
-          if [ "${{ needs.deploy.result }}" = "success" ] && \
-             [ "${{ needs.test-idempotency.result }}" = "success" ]; then
-            python 06-pipeline/notify.py success --text "Fabric verified and idempotent."
+      # jq -n --arg, not string-pasting: a commit title containing a quote
+      # would break a hand-built JSON body on the day you least want to
+      # debug your notifier.
+      - name: Post to Slack
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          OK: ${{ needs.deploy.result == 'success' && needs.test-idempotency.result == 'success' }}
+        run: |
+          if [ "$OK" = "true" ]; then
+            ICON="✅"; HEADLINE="SD-WAN fabric change deployed, verified and idempotent"
           else
-            python 06-pipeline/notify.py failure --text "Check the fabric-snapshots artifact."
+            ICON="🚨"; HEADLINE="SD-WAN fabric pipeline FAILED"
           fi
+          jq -n \
+            --arg icon "$ICON" \
+            --arg headline "$HEADLINE" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg ref "$GITHUB_REF_NAME" \
+            --arg sha "${GITHUB_SHA:0:8}" \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{text: "\($icon) *\($headline)*\n`\($repo)` · `\($ref)` · `\($sha)`\nby \($actor)\n<\($url)|Open the run>"}' \
+          | curl -sS -X POST -H 'Content-Type: application/json' -d @- \
+              "$SLACK_WEBHOOK_URL"

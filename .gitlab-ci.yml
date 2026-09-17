@@ -3,13 +3,16 @@
 #
 #   data/fabric.yaml  ─▶  validate  ─▶  plan  ─▶  deploy  ─▶  test  ─▶  notify
 #
-# One file is edited. Five stages decide whether it reaches a router.
+# One YAML file is edited. Five stages decide whether it reaches a router.
+# There is no application code in this pipeline — Terraform reads the data
+# model itself (`yamldecode`), and Terraform's own preconditions and
+# postconditions are what make the fabric able to refuse its own change.
 #
-#   validate   Is the change coherent?        No fabric, no Vault, no network.
-#   plan       What exactly will it do?       The artifact a reviewer reads.
-#   deploy     Do it — and prove it.          precheck → apply → postcheck → rollback
-#   test       Does it stay done?             A second plan must be empty.
-#   notify     Who finds out?                 Slack, on both outcomes.
+#   validate   Is the change coherent?       No fabric, no Vault, no network.
+#   plan       What exactly will it do?      The artifact a reviewer reads.
+#   deploy     Do it — and prove it.         Apply, verify, roll back on failure.
+#   test       Does it stay done?            A second plan must be empty.
+#   notify     Who finds out?                Slack, on both outcomes.
 #
 # What runs where:
 #
@@ -34,8 +37,8 @@ stages:
   - notify
 
 # Without this, pushing to a branch that has an open MR runs the pipeline
-# twice — once for the branch, once for the MR — and both take the same state
-# lock. The second one waits for the first for no reason at all.
+# twice — once for the branch, once for the MR — and both take the same
+# state lock. The second one waits for the first for no reason at all.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -44,48 +47,49 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 variables:
-  # The rollback in 06-pipeline/pipeline.py reads the PREVIOUS commit of the
-  # data model (`git show HEAD~1:…`). GitLab clones shallow by default, and a
-  # depth of 1 has no HEAD~1 — the rollback would find nothing to roll back
-  # to, at the exact moment it matters.
+  # The rollback in the deploy job reads the PREVIOUS commit of the data
+  # model. GitLab clones shallow by default, and a depth of 1 has no HEAD~1
+  # — the rollback would find nothing to roll back to, at the exact moment
+  # it matters.
   GIT_DEPTH: "20"
 
+  # ── What the pipeline acts on ─────────────────────────────────────
+  DATA_MODEL: "06-pipeline/data/fabric.yaml"
+  # The solution directory: 06-pipeline/terraform ships the planted TASKs
+  # for students to solve, so CI against it would fail forever by design.
+  TF_DIR: "06-pipeline/solution/terraform"
+
   # ── Vault ─────────────────────────────────────────────────────────
-  # Read by the Python toolkit (hvac) and, as a token, by the Terraform vault
-  # provider. Addresses, not secrets — the login is the CI/CD variable.
+  # Addresses, not secrets — the login is the CI/CD variable.
   VAULT_ADDR: "https://vault.autonetops.com"
-  VAULT_SDWAN_MOUNT: "workshop"
-  VAULT_SDWAN_PATH: "sdwan"
+  TF_VAR_vault_address: "${VAULT_ADDR}"
+  TF_VAR_vault_mount: "workshop"
+  TF_VAR_vault_secret_path: "sdwan"
 
   TERRAFORM_VERSION: "1.9.8"
+  YQ_VERSION: "v4.44.3"
   TF_IN_AUTOMATION: "true"
 
-  # ── Terraform inputs ──────────────────────────────────────────────
-  # Note what is NOT here any more: TF_VAR_student, and any other TF_VAR_*
-  # describing the change. Those now come from data/fabric.yaml, rendered to
-  # generated.auto.tfvars.json. A value that can arrive from two places is a
-  # value nobody can review — and *.auto.tfvars.json beats the environment
-  # anyway, so a leftover TF_VAR_ would be silently ignored, which is worse.
-  TF_VAR_vault_address: "${VAULT_ADDR}"
-  TF_VAR_vault_mount: "${VAULT_SDWAN_MOUNT}"
-  TF_VAR_vault_secret_path: "${VAULT_SDWAN_PATH}"
-
-  # Where the pipeline deploys from, and where render.py writes.
-  # 05-terraform/ ships module 5's planted errors, so CI uses the solution.
-  TF_DIR: "05-terraform/solution"
-  DATA_MODEL: "06-pipeline/data/fabric.yaml"
+  # Note what is NOT here: any TF_VAR_* describing the change. No student
+  # number, no banner, no config group name. Those live in the data model,
+  # where a reviewer reads them — and a value that can arrive from two
+  # places is a value nobody can review.
 
   # ── Terraform state, served by GitLab ─────────────────────────────
-  # Module 5 PART C. backend.tf declares `backend "http" {}` and nothing
+  # Module 5 PART C. versions.tf declares `backend "http" {}` and nothing
   # else; every argument arrives here as TF_HTTP_*, which is what makes one
-  # config usable from a laptop and from a pipeline at the same time.
+  # configuration usable from a laptop and from a pipeline at the same time.
   #
   # Why this matters more in CI than anywhere else: `plan`, `deploy` and
   # `test` below are three jobs in three containers. With state as a local
   # file, deploy would start from an empty state on every run and try to
   # create a config group that already exists. Shared state is not a nicety
   # here, it is the thing that makes the pipeline correct.
-  TF_STATE_NAME: "sdwan-bootcamp"
+  #
+  # A DIFFERENT state from module 5's, deliberately: module 6 has its own
+  # Terraform root and creates its own config group. Two states that both
+  # believe they own one object is a fight nobody wins.
+  TF_STATE_NAME: "sdwan-pipeline"
   TF_HTTP_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
   TF_HTTP_LOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
   TF_HTTP_UNLOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
@@ -99,25 +103,27 @@ variables:
   TF_HTTP_PASSWORD: "${CI_JOB_TOKEN}"
 
 default:
-  image: python:3.12-slim
+  image: alpine:3.20
   tags:
     - docker
 
 # ── reusable fragments ──────────────────────────────────────────────
 
+.tools: &tools
+  - apk add --no-cache curl jq git bash >/dev/null
+  - curl -sSL -o /usr/local/bin/yq
+    "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+  - chmod +x /usr/local/bin/yq
+
 .install_terraform: &install_terraform
-  - apt-get update -qq && apt-get install -y -qq curl unzip jq git >/dev/null
+  - apk add --no-cache curl jq git unzip bash >/dev/null
   - curl -sSL -o /tmp/tf.zip
     "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
   - unzip -o -q /tmp/tf.zip -d /usr/local/bin
   - terraform version
 
-# Log in to Vault once, up front. Two things come out of it:
-#
-#   - the Python toolkit reads VAULT_USERNAME / VAULT_PASSWORD directly
-#     (sdwan_toolkit.vault does userpass itself, via hvac);
-#   - Terraform's vault provider speaks tokens and not userpass, so we
-#     exchange the login for a short-lived token here.
+# Log in to Vault once, up front, and exchange the userpass login for a
+# token — the Terraform vault provider speaks tokens, not userpass.
 #
 # Doing it up front means a bad credential fails in five seconds with a clear
 # message, instead of thirty lines into a terraform plan.
@@ -143,23 +149,45 @@ default:
 # STAGE 1 — validate
 #
 # The cheapest stage and the one that saves the most time. Nothing in it
-# touches Vault, the Manager or the network, which is exactly the point: the
-# gate has to keep working on the day the thing it is gating is down.
+# touches Vault, the Manager or the network beyond downloading its own
+# tools. That is the point: the gate has to keep working on the day the
+# thing it is gating is down.
 # ─────────────────────────────────────────────────────────────────────
 
 data-model-validate:
   stage: validate
+  before_script:
+    - *tools
+  # The MEANING of the change: placeholders, naming, empty targets. The
+  # SHAPE of it is terraform-validate's job, below — re-implementing the
+  # schema here would be a second source of truth about it.
   script:
-    - pip install -q -e .
-    # Schema first (is it the right shape?), then the semantic rules (does it
-    # mean something sane?). Exit 1 on either — this is where a change with
-    # "CHANGEME" still in the banner stops.
-    - python 06-pipeline/validate.py "${DATA_MODEL}"
+    - ./06-pipeline/validate-data-model.sh "${DATA_MODEL}"
+
+terraform-validate:
+  stage: validate
+  before_script:
+    - *install_terraform
+  script:
+    # A real gate, not a formatter that quietly rewrites your files.
+    # `-check` fails; `-diff` shows what it wanted. Fix it locally with
+    # `terraform fmt -recursive` and commit that, so the diff on the merge
+    # request is your change and not whitespace.
+    - terraform fmt -check -diff -recursive 05-terraform/
+    - terraform fmt -check -diff -recursive 06-pipeline/
+    # `-backend=false`: no state, no GitLab, no credentials. This still
+    # decodes data/fabric.yaml and type-checks every expression that reads
+    # it, which is how a typo in the data model fails here in seconds
+    # rather than in the plan job against a live Manager.
+    - terraform -chdir="${TF_DIR}" init -backend=false -input=false
+    - terraform -chdir="${TF_DIR}" validate
 
 offline-tests:
   stage: validate
-  # No Vault, no fabric, no network. This job must stay that way — it is the
-  # one that still works when the lab is down.
+  image: python:3.12-slim
+  # The toolkit from modules 1 to 4. No Vault, no fabric, no network — this
+  # job must stay that way; it is the one that still works when the lab is
+  # down. Module 6 itself has no code to test: it is Terraform and YAML.
   script:
     - pip install -q -e ".[dev]"
     - python -m pytest -q --junitxml=report.xml
@@ -169,63 +197,49 @@ offline-tests:
       junit: report.xml
     expire_in: 1 week
 
-terraform-fmt:
-  stage: validate
-  before_script:
-    - *install_terraform
-  # A real gate, not a formatter that quietly rewrites your files. `-check`
-  # fails; `-diff` shows what it wanted. Fix it with `terraform fmt -recursive`
-  # locally and commit that, so the diff on the MR is your change and not
-  # whitespace.
-  script:
-    - terraform fmt -check -diff -recursive 05-terraform/
-
 # ─────────────────────────────────────────────────────────────────────
 # STAGE 2 — plan
 #
-# Renders the data model into Terraform's inputs and asks Terraform what it
-# would do. Runs on merge requests, because the answer to "what exactly is
-# going to change?" belongs in the review, not after it.
+# Asks Terraform what it would do. Runs on merge requests, because the
+# answer to "what exactly is going to change?" belongs in the review, not
+# after it.
+#
+# Note that the preconditions in terraform/main.tf are evaluated HERE, at
+# plan time: `data.sdwan_device.before` has no depends_on, so Terraform
+# reads the fabric during plan. A change that targets an unreachable device
+# is refused on the merge request, before anyone presses deploy.
 # ─────────────────────────────────────────────────────────────────────
 
 plan:
   stage: plan
-  needs: ["data-model-validate", "offline-tests", "terraform-fmt"]
+  needs: ["data-model-validate", "terraform-validate", "offline-tests"]
   # One state, one lock. This serialises plan and deploy across the whole
-  # project: two pipelines planning at once against one fabric is the failure
-  # mode remote state exists to prevent.
+  # project: two pipelines planning at once against one fabric is the
+  # failure mode remote state exists to prevent.
   resource_group: sdwan
   before_script:
     - *install_terraform
     - *vault_login
-    - pip install -q -e .
   script:
-    # data/fabric.yaml → 05-terraform/solution/generated.auto.tfvars.json
-    - python 06-pipeline/render.py --model "${DATA_MODEL}" --out "${TF_DIR}/generated.auto.tfvars.json"
-    - cat "${TF_DIR}/generated.auto.tfvars.json"
-    - cd "${TF_DIR}"
-    # No -backend-config flags: the TF_HTTP_* variables above already are the
-    # backend configuration.
-    - terraform init -input=false
-    # No -var flags either: *.auto.tfvars.json is loaded automatically, which
-    # is what keeps this job and the deploy job from ever disagreeing.
-    - terraform plan -input=false -out=tfplan
+    # No -backend-config flags: the TF_HTTP_* variables above already are
+    # the backend configuration.
+    - terraform -chdir="${TF_DIR}" init -input=false
+    - terraform -chdir="${TF_DIR}" plan -input=false -out=tfplan
     # The human-readable plan is the review artifact: it is what a reviewer
     # reads on the MR to answer "what exactly is going to change?".
-    - terraform show -no-color tfplan > "${CI_PROJECT_DIR}/tfplan.txt"
-    - cat "${CI_PROJECT_DIR}/tfplan.txt"
+    - terraform -chdir="${TF_DIR}" show -no-color tfplan > tfplan.txt
+    - cat tfplan.txt
     # And the binary plan does NOT leave this container. Terraform persists
-    # every data source it reads into the plan file, and module 5 PART B has
-    # it read the Manager credentials out of Vault — so tfplan is a secret,
-    # while `terraform show` redacts it to "(sensitive value)". Job artifacts
-    # are downloadable by every Reporter on the project; publish the redacted
-    # one, keep the other. It is also why the deploy job re-renders and
+    # every data source it reads into the plan file, and this configuration
+    # reads the Manager credentials out of Vault — so tfplan is a secret,
+    # while `terraform show` redacts it to "(sensitive value)". Job
+    # artifacts are downloadable by every Reporter on the project; publish
+    # the redacted one, keep the other. It is also why the deploy job
     # re-plans instead of receiving this file.
-    - rm -f tfplan
+    - rm -f "${TF_DIR}/tfplan"
   artifacts:
     paths:
       - tfplan.txt
-      - 05-terraform/solution/generated.auto.tfvars.json
     expire_in: 1 week
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -234,16 +248,16 @@ plan:
 # ─────────────────────────────────────────────────────────────────────
 # STAGE 3 — deploy
 #
-# The only job that writes to the fabric. Default branch only, manual, behind
-# an environment — three independent locks on the same door.
+# The only job that writes to the fabric. Default branch only, manual,
+# behind an environment — three independent locks on the same door.
 #
-# It does not run `terraform apply` directly. It runs the module 6 pipeline,
-# which wraps the apply in a snapshot on either side:
+# The verification is not in this file. It is in terraform/verify.tf, as a
+# postcondition on a data source that reads the fabric AFTER the change:
+# if a target edge went unreachable, `terraform apply` itself fails, and
+# this job never has to know what BFD is.
 #
-#   precheck → render → apply → wait → postcheck → compare → rollback?
-#
-# Exit 0 means the fabric came out the same or better. Exit 1 means it
-# regressed AND has already been rolled back.
+# What IS in this file is the one thing Terraform cannot do: decide what to
+# do about a failure.
 # ─────────────────────────────────────────────────────────────────────
 
 deploy:
@@ -257,21 +271,68 @@ deploy:
   before_script:
     - *install_terraform
     - *vault_login
-    - pip install -q -e .
   script:
     # Same backend, same state as the plan job — which is the entire reason
     # the state moved to GitLab.
-    - cd "${TF_DIR}" && terraform init -input=false && cd "${CI_PROJECT_DIR}"
-    - python 06-pipeline/solution/pipeline.py --model "${DATA_MODEL}"
+    - terraform -chdir="${TF_DIR}" init -input=false
+    - |
+      set +e
+      terraform -chdir="${TF_DIR}" apply -auto-approve -input=false
+      code=$?
+      set -e
+
+      if [ "$code" -eq 0 ]; then
+        echo "✓ Applied, and the postcondition in verify.tf agreed. Change kept."
+        exit 0
+      fi
+
+      echo ""
+      echo "── ROLLBACK ──"
+
+      # The rollback target is not a backup somebody remembered to take. It
+      # is the previous commit of the data model, and it has been sitting in
+      # Git the whole time. That is most of the argument for putting the
+      # change in a file in the first place.
+      if ! git cat-file -e "HEAD~1:${DATA_MODEL}" 2>/dev/null; then
+        echo "✗ No previous version of ${DATA_MODEL} in git." >&2
+        echo "  Nothing to roll back to. MANUAL INTERVENTION REQUIRED." >&2
+        exit 1
+      fi
+
+      # The case that looks like success and isn't. If the data model did
+      # not change in this commit, the failure did not come from this file
+      # — re-applying it is a no-op, and reporting "rolled back" would be a
+      # lie. Something else moved: somebody in the GUI, or the fabric itself.
+      if git diff --quiet HEAD~1 HEAD -- "${DATA_MODEL}"; then
+        echo "✗ ${DATA_MODEL} is unchanged in this commit." >&2
+        echo "  The failure did not come from the data model, so there is" >&2
+        echo "  nothing here to undo. ESCALATE — do not retry." >&2
+        exit 1
+      fi
+
+      echo "Reverting the data model to HEAD~1:"
+      git --no-pager diff HEAD HEAD~1 -- "${DATA_MODEL}"
+      git checkout HEAD~1 -- "${DATA_MODEL}"
+
+      # Chosen over `terraform destroy`: destroying the config group is more
+      # violent than the change we are undoing, and a rollback that causes
+      # more impact than the original problem is not a rollback, it is a
+      # second incident.
+      if terraform -chdir="${TF_DIR}" apply -auto-approve -input=false; then
+        echo "✓ Rolled back to the previous data model."
+      else
+        # A failed rollback is the worst place a pipeline can be: the fabric
+        # is in neither the old state nor the new one. Escalate, don't retry.
+        echo "✗ ROLLBACK FAILED — MANUAL INTERVENTION REQUIRED." >&2
+      fi
+      exit 1
   after_script:
-    # `after_script` runs even when the job fails — which is exactly when the
-    # snapshots matter most. They are the evidence that the change was
-    # verified, and the material to read when it wasn't.
-    - echo "Snapshots kept as artifacts for post-mortem."
+    # Runs even when the job fails — which is exactly when this matters.
+    - terraform -chdir="${TF_DIR}" output -json > outputs.json 2>/dev/null || true
   artifacts:
     when: always
     paths:
-      - snapshots/
+      - outputs.json
     expire_in: 1 month
   rules:
     # Default branch only, and never automatically. Someone presses the button.
@@ -282,8 +343,8 @@ deploy:
 # ─────────────────────────────────────────────────────────────────────
 # STAGE 4 — test
 #
-# The deploy stage proved the FABRIC is healthy. This stage proves the
-# CONFIGURATION is settled: run the plan again and it must come back empty.
+# Deploy proved the FABRIC survived. This proves the CONFIGURATION is
+# settled: run the plan again and it must come back empty.
 #
 # A second plan that still wants to change something means one of three
 # things, and all three are worth failing a pipeline over:
@@ -291,7 +352,7 @@ deploy:
 #   • a resource is not idempotent — it rewrites itself on every apply, so
 #     every future pipeline shows a change that is not a change;
 #   • the Manager normalised a value you sent (trailing whitespace, a case
-#     change), so your data model and the fabric disagree, permanently;
+#     change), so the data model and the fabric disagree, permanently;
 #   • somebody is editing the fabric in the GUI while the pipeline runs.
 #
 # This is the cheapest test in the pipeline and the one people skip.
@@ -304,20 +365,18 @@ test-idempotency:
   before_script:
     - *install_terraform
     - *vault_login
-    - pip install -q -e .
   script:
-    - python 06-pipeline/render.py --model "${DATA_MODEL}" --out "${TF_DIR}/generated.auto.tfvars.json"
-    - cd "${TF_DIR}"
-    - terraform init -input=false
+    - terraform -chdir="${TF_DIR}" init -input=false
     # -detailed-exitcode is the whole job: 0 = nothing to do, 2 = there is a
-    # diff, anything else = the plan itself failed. Those are three different
-    # outcomes and a plain `terraform plan` collapses them into one.
+    # diff, anything else = the plan itself failed. Those are three
+    # different outcomes and a plain `terraform plan` collapses them into
+    # one, which is why nobody notices when it matters.
     - |
       set +e
-      terraform plan -input=false -no-color -detailed-exitcode > "${CI_PROJECT_DIR}/idempotency.txt"
+      terraform -chdir="${TF_DIR}" plan -input=false -no-color -detailed-exitcode > idempotency.txt
       code=$?
       set -e
-      cat "${CI_PROJECT_DIR}/idempotency.txt"
+      cat idempotency.txt
       case "$code" in
         0) echo "✓ Idempotent — the second plan is empty." ;;
         2) echo "✗ DRIFT: the fabric does not match the data model after a successful apply." >&2
@@ -344,16 +403,37 @@ test-idempotency:
 #     SLACK_WEBHOOK_URL   an incoming-webhook URL for your channel
 #
 # ⚠️ NOT SET YET — add it under Settings → CI/CD → Variables. Both jobs are
-#    skipped entirely while it is missing, and 06-pipeline/notify.py exits 0
-#    if it is called anyway. A pipeline that fails because Slack is down is a
-#    pipeline that taught everyone to ignore it.
+#    skipped entirely while it is missing. A pipeline that fails because
+#    Slack is down is a pipeline that taught everyone to ignore it.
+#
+# The message is built with `jq -n --arg`, not by pasting strings into a
+# shell heredoc. A commit title containing a quote would break the latter
+# on the day you least want a broken notifier.
 # ─────────────────────────────────────────────────────────────────────
+
+.slack: &slack
+  - apk add --no-cache curl jq >/dev/null
+  - |
+    jq -n \
+      --arg icon "$ICON" \
+      --arg headline "$HEADLINE" \
+      --arg project "$CI_PROJECT_PATH" \
+      --arg branch "$CI_COMMIT_REF_NAME" \
+      --arg sha "$CI_COMMIT_SHORT_SHA" \
+      --arg title "$CI_COMMIT_TITLE" \
+      --arg author "$GITLAB_USER_LOGIN" \
+      --arg url "$CI_PIPELINE_URL" \
+      '{text: "\($icon) *\($headline)*\n`\($project)` · `\($branch)` · `\($sha)`\n\($title) — \($author)\n<\($url)|Open the pipeline>"}' \
+    | curl -sS -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL"
 
 notify-success:
   stage: notify
   needs: ["test-idempotency"]
+  variables:
+    ICON: "✅"
+    HEADLINE: "SD-WAN fabric change deployed, verified and idempotent"
   script:
-    - python 06-pipeline/notify.py success --text "Fabric verified and idempotent."
+    - *slack
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $SLACK_WEBHOOK_URL
       when: on_success
@@ -362,8 +442,11 @@ notify-failure:
   stage: notify
   # No `needs:` on purpose. This job must be able to report a failure in ANY
   # earlier stage, and `needs` would tie it to one of them.
+  variables:
+    ICON: "🚨"
+    HEADLINE: "SD-WAN fabric pipeline FAILED"
   script:
-    - python 06-pipeline/notify.py failure --text "Check the snapshots artifact on the deploy job."
+    - *slack
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $SLACK_WEBHOOK_URL
       when: on_failure
@@ -376,7 +459,7 @@ notify-failure:
 # A job killed mid-apply leaves the lock held. GitLab shows it, and you
 # remove it deliberately — after confirming no apply is still running:
 #
-#   terraform force-unlock <LOCK_ID>
+#   terraform -chdir=06-pipeline/solution/terraform force-unlock <LOCK_ID>
 #
 # "Deliberately" is the operative word. A lock you break while someone else
 # is applying is two writers on one fabric, which is the failure mode the

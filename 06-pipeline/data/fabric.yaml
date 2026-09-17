@@ -5,18 +5,21 @@
 # in a merge request, where somebody else can read the diff and disagree
 # with you before it reaches a router.
 #
-#     data/fabric.yaml  ──render──▶  *.auto.tfvars.json  ──▶  terraform
+#     data/fabric.yaml  ──yamldecode()──▶  terraform  ──▶  the fabric
 #
-# Everything the pipeline does downstream is a consequence of what is here.
+# There is no renderer and no generated file. Terraform reads this YAML
+# itself, in terraform/data_model.tf. Everything the pipeline does
+# downstream is a consequence of what is here.
 # ─────────────────────────────────────────────────────────────────────
 
 sdwan:
   # Your bootcamp number. Everything you create is prefixed ws<NN>- so the
   # class does not overwrite itself.
   #
-  # Note that this is NOT read from WS_STUDENT. The data model is the source
-  # of truth, and a value that can also arrive from the environment is a
-  # value nobody can review. One source, or none.
+  # Note that this is NOT read from WS_STUDENT, and not a Terraform
+  # variable either. The data model is the source of truth, and a value that
+  # can also arrive from the environment is a value nobody can review.
+  # One source, or none.
   student: "00"
 
   system:
@@ -29,22 +32,26 @@ sdwan:
       login: "CHANGEME - authorized access only"
 
   config_group:
-    # The bare name. The renderer adds the ws<NN>- prefix; writing it here
-    # too gets you ws00-ws00-config-group, which is valid, deployable and
-    # wrong. `validate` catches that as well.
-    name: config-group
+    # The bare name. Terraform adds the ws<NN>- prefix; writing it here too
+    # gets you ws00-ws00-pipeline, which is valid, deployable and wrong.
+    # `validate` catches that as well.
+    #
+    # Note it is not "config-group": module 5 already creates
+    # ws<NN>-config-group on the same Manager, and two Terraform states that
+    # both believe they own one object is a fight nobody wins.
+    name: pipeline
     description: "Config group deployed by the module 6 pipeline"
 
   # Which devices this change is aimed at.
   #
-  # Terraform never sees this key — the Python pipeline does. `precheck()`
-  # uses it to tell "some device in the shared lab is down" (not your
-  # problem) apart from "the device you are about to change is down" (very
-  # much your problem).
+  # This key produces no resource at all. terraform/verify.tf reads it to
+  # tell "some device in the shared lab is down" (not your problem) apart
+  # from "the device you are about to change is down" (very much your
+  # problem) — the precondition that refuses to start, and the postcondition
+  # that fails the apply.
   #
-  # Put your lab's real edge hostnames here. Module 3's inventory lists them:
-  #     python -c "from sdwan_toolkit import SDWANClient, get_edges; \
-  #                c=SDWANClient.from_vault(); print([d.hostname for d in get_edges(c)])"
+  # Put your lab's real edge hostnames here, exactly as the Manager reports
+  # them. `terraform output` after a successful run lists what it saw.
   targets:
     edges:
       - Site1-Edge1

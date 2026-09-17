@@ -9,7 +9,6 @@ Built one lesson at a time during the bootcamp. Each module maps to a stage:
     diff         →  module 4  — the judge of the change
     tasks        →  module 4  — the asynchronous model
     configgroup  →  module 4  — declarative change
-    datamodel    →  module 6  — the change as reviewable data
 
 Modules 1 and 3 are the ones you write yourself (`vault.py` and `client.py`);
 the rest are written on top of them, and they are short precisely because
@@ -17,14 +16,6 @@ those two exist.
 """
 
 from .client import AuthenticationError, SDWANClient, SDWANError
-from .datamodel import (
-    DataModelError,
-    FabricData,
-    load_data_model,
-    render_tfvars,
-    semantic_checks,
-    write_tfvars,
-)
 from .diff import Severity, SnapshotDiff, compare
 from .inventory import Device, get_controllers, get_devices, get_edges
 from .state import FabricSnapshot, take_snapshot
@@ -40,7 +31,5 @@ __all__ = [
     "FabricSnapshot", "take_snapshot",
     "compare", "SnapshotDiff", "Severity",
     "wait_for_task", "TaskResult", "TaskFailed", "TaskTimeout",
-    "FabricData", "load_data_model", "semantic_checks", "render_tfvars",
-    "write_tfvars", "DataModelError",
     "__version__",
 ]

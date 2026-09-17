@@ -15,11 +15,15 @@ true before anyone is willing to let that happen.**
    ┌──────────┬──────────┬──────┴───┬──────────┬──────────┐
    │ validate │   plan   │  deploy  │   test   │  notify  │
    └──────────┴──────────┴──────────┴──────────┴──────────┘
-     schema +   what will   precheck   is it      who
-     semantics  it do?      apply      settled?   finds out
-                            postcheck
-                            rollback?
+     shape +    what will   apply,     is it      who
+     meaning    it do?      verify,    settled?   finds out
+                            roll back
 ```
+
+**There is no application code in this module.** No Python, no renderer, no
+orchestrator. Terraform reads the YAML itself and Terraform's own
+preconditions and postconditions are what make the fabric able to refuse its
+own change. What you write is the pipeline and the Terraform under it.
 
 ## The thesis
 
@@ -36,7 +40,7 @@ process where the thing that gets reviewed is a diff a human can read.
 
 | Stage | Job(s) | Asks | Needs the fabric? |
 |---|---|---|---|
-| **validate** | `data-model-validate`, `offline-tests`, `terraform-fmt` | Is this change even coherent? | **No** |
+| **validate** | `data-model-validate`, `terraform-validate`, `offline-tests` | Is this change even coherent? | **No** |
 | **plan** | `plan` | What exactly will it do? | Yes (read-only) |
 | **deploy** | `deploy` | Do it — and prove the fabric survived. | Yes (writes) |
 | **test** | `test-idempotency` | Does it *stay* done? | Yes (read-only) |
@@ -60,14 +64,14 @@ after review, and only when a human presses the button.
 
 ---
 
-## The change is a YAML file
+## The change is a YAML file, and Terraform reads it
 
-This is the part that is new in module 6. In module 5 the change lived in
-`terraform.tfvars` — HCL, read by one tool, reviewable by whoever knows that
-tool. Here it lives one level up:
+In module 5 the change lived in `terraform.tfvars` — HCL, read by one tool,
+reviewable by whoever knows that tool. Here it lives one level up, and
+**nothing sits in between**:
 
 ```
-data/fabric.yaml  ──render.py──▶  generated.auto.tfvars.json  ──▶  terraform
+data/fabric.yaml  ──yamldecode()──▶  terraform  ──▶  the fabric
 ```
 
 ```yaml
@@ -78,44 +82,75 @@ sdwan:
       motd: "Managed by the AutoNetOps pipeline"
       login: "Authorized access only"
   config_group:
-    name: config-group
+    name: pipeline
     description: "Config group deployed by the module 6 pipeline"
   targets:
     edges:
       - Site1-Edge1
 ```
 
-Three things follow, and they are the whole lesson:
+```hcl
+# terraform/data_model.tf — the entire integration
+locals {
+  model  = yamldecode(file("${path.module}/../data/fabric.yaml"))
+  sdwan  = local.model.sdwan
+  prefix = "ws${local.sdwan.student}-"
+}
+```
 
-1. **The change gets a schema.** `bannner:` is an error, not a change that
-   passes every check and quietly does nothing. (`extra="forbid"` on every
-   model in `sdwan_toolkit/datamodel.py` — that is what buys you this.)
-2. **The change gets rules.** A schema says *`motd` is a string*. A semantic
-   rule says *a string containing "CHANGEME" must not reach a router*. Both
-   run in `validate`, and they fail differently on purpose.
-3. **The data model outlives the tool.** `targets.edges` is never rendered to
-   Terraform — the Python pipeline reads it. A data model describes the
-   change, not one tool's inputs.
+There is no renderer and no generated file, because Terraform has read YAML
+natively since 0.12. "We need a script to convert the data model" is one of
+the most common unnecessary moving parts in a network pipeline.
 
-`generated.auto.tfvars.json` is generated, gitignored and never edited by
-hand. If you want to change it, the thing you actually want is a field in the
-YAML and a line in `render_tfvars()`.
+Two details worth the minute they cost:
+
+- **`path.module`, not a bare relative path.** `file("../data/fabric.yaml")`
+  resolves against the *process's* working directory — fine on a laptop,
+  wrong the moment CI runs `terraform -chdir=…`, which it does.
+- **`targets.edges` produces no resource at all.** Terraform never turns it
+  into anything; `verify.tf` reads it to decide what to refuse. A data model
+  describes the change, not one tool's inputs.
 
 > **On Cisco's Network as Code.** This module is deliberately shaped like the
 > [Net-as-Code pipeline lab](https://netascode.cisco.com/docs/labs/sdwan/understanding-pipelines/),
 > which is worth reading. It is **not** built on NaC: no `nac-validate`, no
-> `iac-test`, no `terraform-nac-sdwan` module. Everything here is ~200 lines
-> you can read in one sitting, because the point of the bootcamp is to
-> understand the machinery before adopting somebody's packaged version of it.
+> `iac-test`, no `terraform-nac-sdwan` module. Everything here is a few
+> hundred lines of Terraform and YAML you can read in one sitting, because
+> the point of the bootcamp is to understand the machinery before adopting
+> somebody's packaged version of it.
 >
 > | Net-as-Code | Here |
 > |---|---|
 > | `data/*.nac.yaml` | `data/fabric.yaml` |
-> | `nac-validate` (schema + semantics) | `validate.py` + `sdwan_toolkit/datamodel.py` |
-> | `terraform-nac-sdwan` module | `render.py` → module 5's Terraform |
-> | `iac-test` integration tests | `pipeline.py` — snapshot, compare, roll back |
+> | `nac-validate` (schema) | `terraform validate` — it decodes the YAML for you |
+> | `nac-validate` (semantic rules) | `validate-data-model.sh` (yq) |
+> | `terraform-nac-sdwan` module | `terraform/` — yours, and readable |
+> | `iac-test` integration tests | preconditions and postconditions in `verify.tf` |
 > | `test-idempotency` | `terraform plan -detailed-exitcode` |
-> | Webex notification | `notify.py` → Slack |
+> | Webex notification | `jq` + `curl` → Slack |
+
+---
+
+## The one thing to take away: three constructs, three severities
+
+Terraform has three ways to assert something. **They are not
+interchangeable**, and picking the wrong one gives you a pipeline that looks
+like it is checking something and is not.
+
+| | evaluated | on failure | use it for |
+|---|---|---|---|
+| `precondition` | before the resource | **ERROR** — stops the apply | refusing to start |
+| `postcondition` | after the object is read/created | **ERROR** — fails the apply | proving the change did no harm |
+| `check` block | plan *and* apply | **WARNING** — apply still succeeds | things worth knowing that aren't yours to fix |
+
+⚠️ **Read that last row twice.** A `check` block *cannot* fail a pipeline. It
+emits a warning and `terraform` exits 0. If the only verification in your
+configuration is a check block, you have written a pipeline that reports
+problems to a log nobody reads and then deploys anyway.
+
+This is the single most common mistake people make with these three, and it
+is invisible until the day it matters. Which is why this module uses all
+three, each for the thing it is actually good at.
 
 ---
 
@@ -123,46 +158,72 @@ YAML and a line in `render_tfvars()`.
 
 ### 1. Watch the gate refuse you
 
-The shipped data model fails on purpose. Run the validator before you change
-anything:
+The shipped data model fails on purpose:
 
 ```bash
 cd 06-pipeline
-python validate.py
+./validate-data-model.sh
 ```
 
 ```
 ── VALIDATE data/fabric.yaml ──
-  ✓ schema      ws00-config-group · banner motd 71 chars · 1 target edge(s)
-  ✗ semantic    1 problem(s)
-                • sdwan.system.banner.login: contains the placeholder 'CHANGEME'.
-                  A banner is read by everyone who logs in, every day.
+  ✓ student is two digits (it becomes your ws<NN>- prefix)
+  ✓ the MOTD banner is not empty
+  ✓ the login banner is not empty
+  ✗ no placeholder text in the banners
+  ✓ no ^C banner delimiter in the banners
+  ...
+Fix the ✗ lines above. Nothing reaches the fabric until they pass.
 ```
 
-Exit code 1. That is stage 1 of the pipeline doing its job, on your laptop,
-in 200ms, with no lab involved.
+Exit code 1, in under a second, with no lab involved. That is stage 1.
 
-### 2. Make a real change, on a branch
+Needs [yq](https://github.com/mikefarah/yq) — one binary, and the pipeline
+installs it for you.
+
+### 2. Solve the four TASKs in `terraform/`
+
+```bash
+cd 06-pipeline/terraform
+terraform init
+terraform validate      # ← this will fail. On purpose.
+```
+
+| | Where | What |
+|---|---|---|
+| **TASK 1** | `data_model.tf` | The wrong decoder. One word. `terraform validate` names it. |
+| **TASK 2** | `main.tf` | The `precondition` blocks that refuse to start. |
+| **TASK 3** | `verify.tf` | The `postcondition` that fails the apply on a regression. |
+| **TASK 4** | `verify.tf` | The `check` block that reports without blocking. |
+
+`terraform validate` gets you through TASK 1 with no credentials at all.
+For 2, 3 and 4 you need a plan, so load your Vault token first (module 5
+PART B) and run `terraform plan`.
+
+Note the two placeholder conditions in `verify.tf` — Terraform will not even
+let you write `condition = true`:
+
+> The condition expression must refer to at least one object from elsewhere
+> in the configuration, or else its result would not be checking anything.
+
+Terraform is making the same argument this module is.
+
+### 3. Make a real change, on a branch
 
 ```bash
 git switch -c ws07/banner-and-targets
 ```
 
-Edit `data/fabric.yaml`:
-
-- set `student` to **your** number,
-- fix the `login` banner,
-- put your lab's real edge hostnames under `targets.edges`,
-- change the `motd` to something of your own — that is the visible change.
-
-Then run the two local stages:
+Edit `data/fabric.yaml`: your `student` number, a fixed `login` banner, your
+lab's real edge hostnames under `targets.edges`, and a `motd` of your own —
+that last one is the visible change.
 
 ```bash
-python validate.py          # must exit 0 now
-python render.py --print    # see exactly what Terraform will receive
+./validate-data-model.sh                                  # must exit 0 now
+terraform -chdir=terraform plan                           # the gate, live
 ```
 
-### 3. Push it and read the pipeline
+### 4. Push it and read the pipeline
 
 ```bash
 git commit -am "ws07: banner and targets"
@@ -176,79 +237,83 @@ Open the merge request. Two things to look at, in this order:
 - the **`plan`** job's `tfplan.txt` artifact — the answer to *"what exactly is
   going to change?"*, attached to the review rather than discovered after it.
 
+Something subtle happens here that the Python version could not do. The
+preconditions are evaluated at **plan** time, because
+`data.sdwan_device.before` has no `depends_on` and Terraform therefore reads
+the fabric during plan. **A change that targets an unreachable device is
+refused on the merge request**, before anyone presses deploy.
+
 Merge. On the default branch the `deploy` job appears — and waits, because it
 is `when: manual` behind the `fabric-lab` environment. Press it.
 
-### 4. Run the deploy stage by hand first
-
-Before you trust the button, run what it runs:
-
-```bash
-cd 06-pipeline
-python pipeline.py --dry-run      # both snapshots, changes nothing
-python pipeline.py                # the full cycle
-python pipeline.py --wait 10      # shorter convergence wait, for a demo
-```
-
-Exit code `0` = fabric intact. `1` = regressed, **and already rolled back**.
-That exit code is the whole interface between your Python and the pipeline.
-
 ---
 
-## The four decisions the exercise asks for
+## The four decisions the TASKs ask for
 
-The TODOs in `pipeline.py` don't have one right answer. They have a
-**justification** — write yours down, in the MR description or here.
+They don't have one right answer. They have a **justification** — write yours
+down, in the MR description or here.
 
-### TASK 1 — should precheck abort if a device is down?
+### TASK 1 — why is there no renderer?
 
-In a shared lab, aborting because *some* device is down is unworkable:
+Because Terraform reads YAML. The interesting question is the one underneath:
+how many moving parts in your pipeline exist only because nobody checked
+whether the tool already did it?
+
+### TASK 2 — should the gate refuse when a device is down?
+
+In a shared lab, refusing because *some* device is down is unworkable:
 somebody always has one deliberately down, and a gate that fires on other
 people's work is a gate that gets commented out in week two.
 
-Aborting because a device **this change targets** is down is a different
-thing entirely. That is what `targets.edges` is for, and it is why the data
-model carries a key Terraform never reads.
+Refusing because a device **this change targets** is down is a different
+thing entirely. That is what `targets.edges` is for.
 
-The other half, easy to forget: `compare()` only looks at the *difference*. A
-device that was down before and after produces no finding at all. Report it
-even when you don't abort on it.
+The other half, easy to forget: the far more common failure is a *typo* in
+`targets.edges` — a hostname the fabric has never heard of. A gate that only
+checks reachability silently passes a change aimed at nothing.
 
-### TASK 2 — where does the rendering happen?
+### TASK 3 — why `depends_on` on a data source?
 
-`plan` rendered the data model already. `deploy` renders it again, because
-`plan` was a different container. The alternative is to pass the saved plan
-between jobs as an artifact — which this repo deliberately does not do:
-Terraform persists every data source it read into the plan file, and module 5
-PART B has it read the Manager password out of Vault. `terraform show`
-redacts; the binary file does not.
+Without it, Terraform reads `data.sdwan_device.after` during **plan**, along
+with every other data source — and the postcondition would be checking the
+fabric *before* the change. It would pass, always, and mean nothing.
 
-### TASK 3 — how long before the postcheck?
+`depends_on` defers the read to apply time. One line, and it is the
+difference between verification and theatre.
 
-BFD and OMP do not reconverge instantly. An immediate postcheck reports a
-regression that isn't real — and **a pipeline that cries wolf is a pipeline
-people switch off.** The solution waits 60s. Defend your number.
+### TASK 4 — isn't the check block duplicating TASK 2?
 
-### TASK 4 — rollback by re-applying, or by destroying?
+It asserts a related fact at a different severity, and that is the point. The
+precondition is about **your** targets and it blocks. The check is about
+**everyone's** devices and it does not.
 
-Destroying the config group is more violent than the change you are undoing.
-**A rollback that causes more impact than the original problem isn't a
-rollback — it's a second incident.**
+A device that was down before and is still down after produces no finding in
+any diff — it did not change. Without something like the check block, nobody
+ever notices, and the fabric degrades one device at a time between
+deployments.
 
-The rollback target is not a backup somebody remembered to take. It is the
-previous commit of `data/fabric.yaml`, and it has been in Git the whole time:
+### And the one the pipeline decides, not Terraform
+
+Terraform can fail an apply. It cannot decide what to do next. The rollback
+lives in `.gitlab-ci.yml`, and the target is not a backup somebody remembered
+to take — it is the previous commit of the data model:
 
 ```bash
-git show HEAD~1:06-pipeline/data/fabric.yaml
+git checkout HEAD~1 -- 06-pipeline/data/fabric.yaml
+terraform -chdir="$TF_DIR" apply -auto-approve
 ```
 
-Two cases the solution handles explicitly, because both look like success:
+Chosen over `terraform destroy`: destroying the config group is more violent
+than the change being undone, and **a rollback that causes more impact than
+the original problem isn't a rollback — it's a second incident.**
+
+Two cases the job handles explicitly, because both look like success:
 
 - **no previous version** (first commit, or a shallow clone — GitLab clones
-  shallow by default, which is why `.gitlab-ci.yml` sets `GIT_DEPTH`);
-- **the previous version is identical**, which means the regression did not
-  come from this file. Re-applying it is a no-op, and reporting "rolled back"
-  would be a lie. Say so and escalate.
+  shallow by default, which is why the pipeline sets `GIT_DEPTH`);
+- **the data model is unchanged in this commit**, which means the failure did
+  not come from this file. Re-applying it is a no-op and reporting "rolled
+  back" would be a lie. Escalate instead.
 
 ---
 
@@ -286,16 +351,14 @@ This is the cheapest test in the pipeline and the one people skip.
 A deploy that succeeded and told nobody is fine. A deploy that **failed** and
 told nobody is an outage with a delay fuse on it.
 
-```bash
-python notify.py success
-python notify.py failure --text "rollback did not complete"
-```
-
 ⚠️ **`SLACK_WEBHOOK_URL` is not set yet** — create an incoming webhook for
 your channel and add it as a **masked, protected** CI/CD variable. Until then
-both jobs are skipped, and `notify.py` exits 0 if you call it anyway: a
-pipeline that fails because Slack is down is a pipeline that teaches everyone
-to ignore it.
+both jobs are skipped entirely: a pipeline that fails because Slack is down
+is a pipeline that teaches everyone to ignore it.
+
+The message is built with `jq -n --arg`, not by pasting strings into a shell
+heredoc. A commit title containing a quote would break the latter on the day
+you least want a broken notifier.
 
 ---
 
@@ -303,25 +366,27 @@ to ignore it.
 
 ```
 06-pipeline/
-├── data/fabric.yaml    THE CHANGE. The only file you edit.      ← stage 1 input
-├── validate.py         schema + semantic rules                  ← stage 1   (TASK 1)
-├── render.py           data model → Terraform's inputs          ← stage 2
-├── pipeline.py         precheck → apply → postcheck → rollback  ← stage 3   (TASKS 1-4)
-├── notify.py           Slack, on both outcomes                  ← stage 5
-└── solution/           validate.py and pipeline.py, finished and annotated
+├── data/fabric.yaml           THE CHANGE. The only file you edit.
+├── validate-data-model.sh     stage 1 — the semantic rules, in yq
+├── terraform/                 ← YOU COMPLETE THIS
+│   ├── data_model.tf            yamldecode                      TASK 1
+│   ├── main.tf                  the change, and the gate        TASK 2
+│   ├── verify.tf                postcondition, check block      TASKS 3, 4
+│   ├── providers.tf             sdwan + vault
+│   ├── vault.tf                 credentials Terraform fetches itself
+│   ├── variables.tf             plumbing only — nothing about the change
+│   ├── versions.tf              (no backend: local state, your laptop)
+│   └── outputs.tf
+└── solution/terraform/        the finished version, annotated
+    └── backend.tf               + GitLab state, which the pipeline needs
 ```
 
-`render.py` and `notify.py` ship complete — they have no TODOs. The two files
-with work in them are `validate.py` (one rule of your own) and `pipeline.py`
-(the four decisions below).
+The pipeline itself is `.gitlab-ci.yml` at the repository root, with
+`.github/workflows/change-validation.yml` as the GitHub equivalent.
 
-The schema and the rules themselves live in `sdwan_toolkit/datamodel.py`,
-with `tests/test_datamodel.py` covering them offline — because a validator
-nobody tests is a validator nobody should trust.
-
-```bash
-python -m pytest tests/test_datamodel.py -q
-```
+> Your `terraform/` and the pipeline's `solution/terraform/` both create
+> `ws<NN>-pipeline` on the same Manager, from two different states. Run one
+> or the other, not both — the same caveat module 5 carries.
 
 ## Secrets and variables
 
@@ -340,10 +405,11 @@ PART B paying off.
 
 - Post `tfplan.txt` automatically as an MR comment, so the reviewer doesn't
   have to open a job log.
+- Add BFD and OMP session counts to the postcondition, not just
+  reachability — the `sdwan_device` data source won't give you those, so this
+  is where the Python toolkit from modules 1–4 earns its keep again.
 - Swap the homegrown rollback for the Manager's native **config-rollback
   timer**, and compare the two failure modes.
-- Add an **integration test** to the `test` stage: read the config group back
-  off the Manager and assert it matches `data/fabric.yaml`. You have
-  everything you need in `sdwan_toolkit/configgroup.py`.
-- Extend `compare()` with app-route SLA, not just session counts.
+- Split `data/fabric.yaml` into one file per site and `yamldecode` a
+  directory — that is the step where a data model becomes a data *model*.
 - Manager alarms over webhook → event-driven automation.
