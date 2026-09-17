@@ -14,12 +14,6 @@
 
 sdwan:
   # Your bootcamp number. Everything you create is prefixed ws<NN>- so the
-  # class does not overwrite itself.
-  #
-  # Note that this is NOT read from WS_STUDENT, and not a Terraform
-  # variable either. The data model is the source of truth, and a value that
-  # can also arrive from the environment is a value nobody can review.
-  # One source, or none.
   student: "00"
 
   system:
