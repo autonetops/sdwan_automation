@@ -11,7 +11,9 @@ import sys
 import time
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 from sdwan_toolkit import SDWANClient, compare, get_devices  # noqa: E402
 from sdwan_toolkit.configgroup import (  # noqa: E402
@@ -43,6 +45,7 @@ def my_prefix() -> str:
 
 
 # ── PART A — state as data ──────────────────────────────────────────
+
 
 def count_up(rows: list[dict], *fields: str) -> int:
     total = 0
@@ -111,9 +114,12 @@ def print_snapshot(snapshot: FabricSnapshot) -> None:
 
 # ── PART B — the change ─────────────────────────────────────────────
 
+
 def my_config_group(client: SDWANClient):
     prefix = my_prefix()
-    group = next((g for g in list_config_groups(client) if g.name.startswith(prefix)), None)
+    group = next(
+        (g for g in list_config_groups(client) if g.name.startswith(prefix)), None
+    )
     if group is None:
         # Name what to check. "Not found" costs the next person twenty minutes.
         raise SystemExit(
@@ -152,6 +158,7 @@ def run_deploy(client: SDWANClient, group_id: str, device_uuids: list[str]):
 
 
 # ── PART C — the verdict ────────────────────────────────────────────
+
 
 def change_and_verify(client: SDWANClient, group, device_uuids: list[str]) -> bool:
     print("── BEFORE ──")
@@ -213,8 +220,10 @@ def main() -> int:
             edges = [e for e in snapshot.devices.values() if e.bfd_sessions_up]
             if edges:
                 winner = max(edges, key=lambda e: e.bfd_sessions_up)
-                print(f"\n>>> ANSWER (a): {winner.hostname} "
-                      f"with {winner.bfd_sessions_up} BFD sessions up")
+                print(
+                    f"\n>>> ANSWER (a): {winner.hostname} "
+                    f"with {winner.bfd_sessions_up} BFD sessions up"
+                )
             return 0
 
         group = my_config_group(client)

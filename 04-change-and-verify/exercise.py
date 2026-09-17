@@ -75,6 +75,7 @@ def my_prefix() -> str:
 # `row.get("state") or row.get("status")` from spreading through everything.
 # ─────────────────────────────────────────────────────────────────────
 
+
 def count_up(rows: list[dict], *fields: str) -> int:
     """Count rows whose state field indicates 'up' (or 'ok')."""
     # TODO 1.1: for each row, check each candidate field in `fields`.
@@ -90,6 +91,7 @@ def count_up(rows: list[dict], *fields: str) -> int:
 #    across the control plane to answer. They are expensive and the lab is
 #    shared with the whole class. Don't collect what you won't compare.
 # ─────────────────────────────────────────────────────────────────────
+
 
 def collect(client: SDWANClient, device) -> DeviceState:
     state = DeviceState(
@@ -159,6 +161,7 @@ def print_snapshot(snapshot: FabricSnapshot) -> None:
 # uses it.
 # ─────────────────────────────────────────────────────────────────────
 
+
 def my_config_group(client: SDWANClient):
     """Return the ConfigGroup whose name starts with your prefix."""
     # TODO 3.1: list the config groups and return the first whose `name`
@@ -186,6 +189,7 @@ def show_preview(client: SDWANClient, group_id: str, device_uuid: str) -> None:
 # Without polling you don't know whether it worked — only that it was
 # accepted. Those are very different claims.
 # ─────────────────────────────────────────────────────────────────────
+
 
 def run_deploy(client: SDWANClient, group_id: str, device_uuids: list[str]):
     """Trigger the deployment and wait for it. Returns the TaskResult."""
@@ -222,6 +226,7 @@ def run_deploy(client: SDWANClient, group_id: str, device_uuids: list[str]):
 # losing one is bad. A text diff doesn't know that — yours does. That opinion
 # is what lets module 6's pipeline decide between carrying on and rolling back.
 # ─────────────────────────────────────────────────────────────────────
+
 
 def change_and_verify(client: SDWANClient, group, device_uuids: list[str]) -> bool:
     """before → deploy → after → verdict. True means safe to keep."""
@@ -261,10 +266,16 @@ def change_and_verify(client: SDWANClient, group, device_uuids: list[str]) -> bo
 def main() -> int:
     parser = argparse.ArgumentParser(description="Change the fabric, and prove it")
     parser.add_argument("--list", action="store_true", help="list config groups")
-    parser.add_argument("--snapshot", metavar="FILE", help="snapshot only, then write it out")
+    parser.add_argument(
+        "--snapshot", metavar="FILE", help="snapshot only, then write it out"
+    )
     parser.add_argument("--compare", nargs=2, metavar=("BEFORE", "AFTER"))
-    parser.add_argument("--preview", action="store_true", help="dry run, changes nothing")
-    parser.add_argument("--deploy", action="store_true", help="the full before/after cycle")
+    parser.add_argument(
+        "--preview", action="store_true", help="dry run, changes nothing"
+    )
+    parser.add_argument(
+        "--deploy", action="store_true", help="the full before/after cycle"
+    )
     args = parser.parse_args()
 
     # Offline: comparing two files needs no Manager at all. Note the exit

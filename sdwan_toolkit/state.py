@@ -19,12 +19,14 @@ from typing import Any
 from .client import SDWANClient
 from .inventory import Device, get_devices
 
-
 # ── individual collectors ───────────────────────────────────────────
 # All real-time: they query the device across the control plane.
 # They are expensive. That is why the client has a rate limiter.
 
-def get_control_connections(client: SDWANClient, system_ip: str) -> list[dict[str, Any]]:
+
+def get_control_connections(
+    client: SDWANClient, system_ip: str
+) -> list[dict[str, Any]]:
     """Control connections (DTLS/TLS) from the device to the controllers."""
     return client.get("/device/control/connections", {"deviceId": system_ip}) or []
 
@@ -45,6 +47,7 @@ def get_approute_stats(client: SDWANClient, system_ip: str) -> list[dict[str, An
 
 
 # ── the snapshot ────────────────────────────────────────────────────
+
 
 @dataclass
 class DeviceState:
@@ -144,7 +147,12 @@ def collect_device_state(client: SDWANClient, device: Device) -> DeviceState:
         bfd = get_bfd_sessions(client, device.system_ip)
         state.bfd_sessions_up = _count_up(bfd, "state", "status")
         state.bfd_peers = sorted(
-            {r.get("system-ip", "") for r in bfd if str(r.get("state", "")).lower() == "up"} - {""}
+            {
+                r.get("system-ip", "")
+                for r in bfd
+                if str(r.get("state", "")).lower() == "up"
+            }
+            - {""}
         )
 
     omp = get_omp_peers(client, device.system_ip)
@@ -153,7 +161,9 @@ def collect_device_state(client: SDWANClient, device: Device) -> DeviceState:
     return state
 
 
-def take_snapshot(client: SDWANClient, devices: list[Device] | None = None) -> FabricSnapshot:
+def take_snapshot(
+    client: SDWANClient, devices: list[Device] | None = None
+) -> FabricSnapshot:
     """A full snapshot of the fabric. The pipeline calls this twice."""
     devices = devices if devices is not None else get_devices(client)
     snapshot = FabricSnapshot(taken_at=datetime.now(timezone.utc).isoformat())

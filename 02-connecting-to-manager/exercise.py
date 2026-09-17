@@ -33,12 +33,14 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 #    KeyError for an hour when the right answer was "your password is wrong".
 # ─────────────────────────────────────────────────────────────────────
 
+
 def authenticate(base_url: str, username: str, password: str) -> requests.Session:
     """Return a requests.Session that is authenticated and ready to write."""
     session = requests.Session()
     session.verify = False  # lab with a self-signed certificate
 
     # TODO 1.1: POST to /j_security_check with the form data.
+    #           Hint: Content-Type: application/x-www-form-urlencoded
     #           Hint: data={"j_username": ..., "j_password": ...}
 
     # TODO 1.2: detect the trap. If "<html" shows up at the start of the
@@ -60,6 +62,7 @@ def authenticate(base_url: str, username: str, password: str) -> requests.Sessio
 # through the entire API.
 # ─────────────────────────────────────────────────────────────────────
 
+
 def list_devices(session: requests.Session, base_url: str) -> list[dict]:
     """Return the device list, already unwrapped from 'data'."""
     # TODO 2.1: perform the GET and return resp.json()["data"].
@@ -71,6 +74,7 @@ def list_devices(session: requests.Session, base_url: str) -> list[dict]:
 #
 # Run against the lab and note the answer. It only exists in the real fabric.
 # ─────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     creds = load_credentials()
@@ -96,9 +100,9 @@ def main() -> None:
 
     # TODO 3.1: how many WAN Edges (personality other than vmanage/vsmart/vbond)
     #           are 'reachable'? Note the number — that is your answer.
+    #       Try with filter(func, iterable) or a list comprehension.
     edges = [
-        d for d in devices
-        if d.get("personality") not in ("vmanage", "vsmart", "vbond")
+        d for d in devices if d.get("personality") not in ("vmanage", "vsmart", "vbond")
     ]
     print(f"\nTotal devices: {len(devices)}")
     print(f"WAN Edges: {len(edges)}")

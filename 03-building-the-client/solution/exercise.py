@@ -16,7 +16,9 @@ from typing import Any
 import requests
 import urllib3
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 from sdwan_toolkit.vault import ManagerCredentials, load_credentials  # noqa: E402
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -123,7 +125,9 @@ class SDWANClient:
         self._token = token_resp.text.strip()
         self.session.headers.update({"X-XSRF-TOKEN": self._token})
 
-        logger.info("Authenticated to %s as %s", self.base_url, self._credentials.username)
+        logger.info(
+            "Authenticated to %s as %s", self.base_url, self._credentials.username
+        )
         return self  # so SDWANClient(creds).login() chains
 
     def logout(self) -> None:
@@ -150,7 +154,9 @@ class SDWANClient:
 
     # ── HTTP verbs ──────────────────────────────────────────────────
 
-    def request(self, method: str, path: str, *, unwrap: bool = True, **kwargs: Any) -> Any:
+    def request(
+        self, method: str, path: str, *, unwrap: bool = True, **kwargs: Any
+    ) -> Any:
         """Every call goes through here. That's the point.
 
         Rate limiting, error context and unwrapping stop being things each
@@ -177,7 +183,9 @@ class SDWANClient:
         if not resp.ok:
             # The body is where the Manager says what it actually disliked.
             # Truncated, because some error pages are the whole GUI.
-            raise SDWANError(f"{method} {path} → HTTP {resp.status_code}: {resp.text[:300]}")
+            raise SDWANError(
+                f"{method} {path} → HTTP {resp.status_code}: {resp.text[:300]}"
+            )
 
         if not resp.content:
             return None

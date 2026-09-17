@@ -86,17 +86,26 @@ def move_device(client: SDWANClient, uuid: str, from_gid: str, to_gid: str) -> N
       GET it, fill our captured values into it, and PUT the whole payload
       back (set_device_variables handles the family→solution rename).
     """
-    captured = {v["name"]: v["value"] for v in variables_for(client, from_gid, uuid)
-                if "value" in v}
-    missing = [v["name"] for v in variables_for(client, from_gid, uuid)
-               if "value" not in v]
+    captured = {
+        v["name"]: v["value"]
+        for v in variables_for(client, from_gid, uuid)
+        if "value" in v
+    }
+    missing = [
+        v["name"] for v in variables_for(client, from_gid, uuid) if "value" not in v
+    ]
     if not captured or missing:
-        raise SystemExit(f"Refusing to move: source group has unset variables "
-                         f"{missing or '(none at all)'} for this device. Fix them "
-                         f"first — after the detach they are unrecoverable.")
+        raise SystemExit(
+            f"Refusing to move: source group has unset variables "
+            f"{missing or '(none at all)'} for this device. Fix them "
+            f"first — after the detach they are unrecoverable."
+        )
 
-    client.request("DELETE", f"/v1/config-group/{from_gid}/device/associate",
-                   json={"devices": [{"id": uuid}]})
+    client.request(
+        "DELETE",
+        f"/v1/config-group/{from_gid}/device/associate",
+        json={"devices": [{"id": uuid}]},
+    )
     associate_devices(client, to_gid, [uuid])
 
     payload = get_device_variables(client, to_gid)
@@ -108,9 +117,11 @@ def move_device(client: SDWANClient, uuid: str, from_gid: str, to_gid: str) -> N
                 var["value"] = captured[var["name"]]
         gaps = [v["name"] for v in dev.get("variables", []) if "value" not in v]
         if gaps:
-            raise SystemExit(f"Variables {gaps} have no value to carry — the device "
-                             f"is associated but NOT deployable. Fill them in the GUI "
-                             f"(Configuration → Config Groups → Deploy) before deploying.")
+            raise SystemExit(
+                f"Variables {gaps} have no value to carry — the device "
+                f"is associated but NOT deployable. Fill them in the GUI "
+                f"(Configuration → Config Groups → Deploy) before deploying."
+            )
     set_device_variables(client, to_gid, payload)
     print(f"  moved {uuid}: {len(captured)} variable values carried")
 
@@ -121,8 +132,9 @@ def cmd_list(client: SDWANClient) -> None:
         print(f"{g.name:<28} {g.id}  devices: {[d.get('id') for d in devs]}")
 
 
-def cmd_seed(client: SDWANClient, student: str, site_group: str, hostname: str,
-             do_deploy: bool) -> None:
+def cmd_seed(
+    client: SDWANClient, student: str, site_group: str, hostname: str, do_deploy: bool
+) -> None:
     site = find_config_group(client, site_group)
     if site is None:
         raise SystemExit(f"Site group {site_group!r} not found.")
@@ -138,12 +150,15 @@ def cmd_seed(client: SDWANClient, student: str, site_group: str, hostname: str,
     if group is None:
         detail = client.get(f"/v1/config-group/{site.id}")
         profiles = [{"id": p["id"]} for p in detail.get("profiles", [])]
-        created = client.post("/v1/config-group", {
-            "name": name,
-            "description": f"Bootcamp student ws{student} — mirrors {site_group}",
-            "solution": "sdwan",
-            "profiles": profiles,
-        })
+        created = client.post(
+            "/v1/config-group",
+            {
+                "name": name,
+                "description": f"Bootcamp student ws{student} — mirrors {site_group}",
+                "solution": "sdwan",
+                "profiles": profiles,
+            },
+        )
         gid = created.get("id") if isinstance(created, dict) else None
         if not gid:
             raise SystemExit(f"Group creation returned no id: {created!r}")
@@ -159,8 +174,9 @@ def cmd_seed(client: SDWANClient, student: str, site_group: str, hostname: str,
     print(f"done — {hostname} now belongs to {name}")
 
 
-def cmd_revert(client: SDWANClient, student: str, site_group: str, hostname: str,
-               do_deploy: bool) -> None:
+def cmd_revert(
+    client: SDWANClient, student: str, site_group: str, hostname: str, do_deploy: bool
+) -> None:
     name = student_group_name(student, site_group)
     group = find_config_group(client, name)
     site = find_config_group(client, site_group)
@@ -177,14 +193,19 @@ def cmd_revert(client: SDWANClient, student: str, site_group: str, hostname: str
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed/revert per-student config groups")
+    parser = argparse.ArgumentParser(
+        description="Seed/revert per-student config groups"
+    )
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--seed", metavar="NN")
     parser.add_argument("--revert", metavar="NN")
     parser.add_argument("--site", help="site config group, e.g. CG_SITE101")
     parser.add_argument("--device", help="edge hostname, e.g. cedge1-101")
-    parser.add_argument("--no-deploy", action="store_true",
-                        help="move the association but skip the deploy")
+    parser.add_argument(
+        "--no-deploy",
+        action="store_true",
+        help="move the association but skip the deploy",
+    )
     args = parser.parse_args()
 
     with SDWANClient.from_vault() as client:

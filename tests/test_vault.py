@@ -122,13 +122,17 @@ def test_a_malformed_secret_names_the_missing_keys(monkeypatch, vault_env):
 def test_a_trailing_slash_in_the_url_is_removed(monkeypatch, vault_env):
     """Otherwise every path becomes https://manager.lab//dataservice/…"""
     monkeypatch.setattr(
-        vault.hvac, "Client", fake_hvac({**SECRET, "url": "  https://manager.example.lab/  "})
+        vault.hvac,
+        "Client",
+        fake_hvac({**SECRET, "url": "  https://manager.example.lab/  "}),
     )
     assert load_credentials().url == "https://manager.example.lab"
 
 
 def test_repr_does_not_leak_the_password():
-    creds = ManagerCredentials(url="https://manager.example.lab", username="a", password="s3cr3t")
+    creds = ManagerCredentials(
+        url="https://manager.example.lab", username="a", password="s3cr3t"
+    )
     assert "s3cr3t" not in repr(creds)
     assert "s3cr3t" not in str(creds)
     assert "***" in repr(creds)

@@ -17,9 +17,9 @@ from .state import DeviceState, FabricSnapshot
 
 
 class Severity(str, Enum):
-    REGRESSION = "regression"    # got worse — fails the change
+    REGRESSION = "regression"  # got worse — fails the change
     IMPROVEMENT = "improvement"  # got better — informational
-    INFO = "info"                # changed without getting worse
+    INFO = "info"  # changed without getting worse
 
 
 @dataclass
@@ -58,7 +58,9 @@ class SnapshotDiff:
     def report(self) -> str:
         lines: list[str] = []
         if self.missing_devices:
-            lines.append(f"✗ Gone from the fabric: {', '.join(sorted(self.missing_devices))}")
+            lines.append(
+                f"✗ Gone from the fabric: {', '.join(sorted(self.missing_devices))}"
+            )
         if self.new_devices:
             lines.append(f"· New in the fabric: {', '.join(sorted(self.new_devices))}")
         lines.extend(str(f) for f in self.findings)
@@ -81,13 +83,25 @@ def _compare_device(before: DeviceState, after: DeviceState) -> list[Finding]:
 
     if before.reachable and not after.reachable:
         findings.append(
-            Finding(after.system_ip, after.hostname, "reachability", "reachable",
-                    "unreachable", Severity.REGRESSION)
+            Finding(
+                after.system_ip,
+                after.hostname,
+                "reachability",
+                "reachable",
+                "unreachable",
+                Severity.REGRESSION,
+            )
         )
     elif not before.reachable and after.reachable:
         findings.append(
-            Finding(after.system_ip, after.hostname, "reachability", "unreachable",
-                    "reachable", Severity.IMPROVEMENT)
+            Finding(
+                after.system_ip,
+                after.hostname,
+                "reachability",
+                "unreachable",
+                "reachable",
+                Severity.IMPROVEMENT,
+            )
         )
 
     for attr, label in _HIGHER_IS_BETTER:
@@ -98,13 +112,21 @@ def _compare_device(before: DeviceState, after: DeviceState) -> list[Finding]:
             severity = Severity.IMPROVEMENT
         else:
             continue
-        findings.append(Finding(after.system_ip, after.hostname, label, old, new, severity))
+        findings.append(
+            Finding(after.system_ip, after.hostname, label, old, new, severity)
+        )
 
     lost_peers = set(before.bfd_peers) - set(after.bfd_peers)
     if lost_peers:
         findings.append(
-            Finding(after.system_ip, after.hostname, "BFD peers lost", sorted(lost_peers),
-                    [], Severity.REGRESSION)
+            Finding(
+                after.system_ip,
+                after.hostname,
+                "BFD peers lost",
+                sorted(lost_peers),
+                [],
+                Severity.REGRESSION,
+            )
         )
 
     return findings
@@ -117,6 +139,8 @@ def compare(before: FabricSnapshot, after: FabricSnapshot) -> SnapshotDiff:
     diff.new_devices = sorted(after.devices.keys() - before.devices.keys())
 
     for system_ip in sorted(before.devices.keys() & after.devices.keys()):
-        diff.findings.extend(_compare_device(before.devices[system_ip], after.devices[system_ip]))
+        diff.findings.extend(
+            _compare_device(before.devices[system_ip], after.devices[system_ip])
+        )
 
     return diff

@@ -28,6 +28,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # caller have to remember, and what should the object remember instead?
 # ─────────────────────────────────────────────────────────────────────
 
+
 def authenticate(base_url: str, username: str, password: str) -> requests.Session:
     session = requests.Session()
     session.verify = False
@@ -41,7 +42,9 @@ def authenticate(base_url: str, username: str, password: str) -> requests.Sessio
     resp.raise_for_status()
 
     if "<html" in resp.text[:512].lower():
-        raise RuntimeError("Invalid username or password (the Manager returned the login page).")
+        raise RuntimeError(
+            "Invalid username or password (the Manager returned the login page)."
+        )
 
     if "JSESSIONID" not in session.cookies:
         raise RuntimeError("Login did not return JSESSIONID.")
@@ -69,6 +72,7 @@ def list_devices(session: requests.Session, base_url: str) -> list[dict]:
 #
 # A floor on the interval between calls fixes it. 0.34s ≈ 3 calls/second.
 # ─────────────────────────────────────────────────────────────────────
+
 
 class RateLimiter:
     """Call spacer. Simple, thread-safe, good enough."""
@@ -100,6 +104,7 @@ class AuthenticationError(SDWANError):
 # In module 2 the caller carried `session` and `base_url` to every call. The
 # client carries them instead. That's the whole idea; everything else follows.
 # ─────────────────────────────────────────────────────────────────────
+
 
 class SDWANClient:
     """An authenticated session against the Manager."""
@@ -188,7 +193,9 @@ class SDWANClient:
     # remembers or not.
     # ─────────────────────────────────────────────────────────────────
 
-    def request(self, method: str, path: str, *, unwrap: bool = True, **kwargs: Any) -> Any:
+    def request(
+        self, method: str, path: str, *, unwrap: bool = True, **kwargs: Any
+    ) -> Any:
         """Call the Manager with rate limiting, error handling and unwrapping.
 
         Args:
@@ -260,6 +267,7 @@ class SDWANClient:
 # ─────────────────────────────────────────────────────────────────────
 # TASK 5 — Use it, and see what the refactor bought you
 # ─────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     with SDWANClient.from_vault() as mgr:

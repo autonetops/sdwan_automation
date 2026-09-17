@@ -12,7 +12,10 @@ def test_normalizes_hyphenated_keys(device_payload):
 
 def test_separates_edges_from_controllers(device_payload):
     devices = [Device.from_api(d) for d in device_payload]
-    assert [d.hostname for d in devices if d.is_controller] == ["Manager-1", "Controller-1"]
+    assert [d.hostname for d in devices if d.is_controller] == [
+        "Manager-1",
+        "Controller-1",
+    ]
     assert [d.hostname for d in devices if d.is_edge] == ["Site1-Edge1", "Site2-Edge1"]
 
 

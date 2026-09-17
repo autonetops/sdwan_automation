@@ -60,7 +60,9 @@ class Device:
         return cls(
             system_ip=payload.get("system-ip") or payload.get("deviceId") or "",
             hostname=payload.get("host-name") or payload.get("hostName") or "",
-            personality=(payload.get("personality") or payload.get("deviceType") or "").lower(),
+            personality=(
+                payload.get("personality") or payload.get("deviceType") or ""
+            ).lower(),
             site_id=payload.get("site-id") or payload.get("siteId"),
             reachability=payload.get("reachability"),
             state=payload.get("state"),

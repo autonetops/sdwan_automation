@@ -6,13 +6,19 @@ from sdwan_toolkit.state import DeviceState, FabricSnapshot
 
 def _snapshot(**overrides):
     base = dict(
-        system_ip="10.255.255.11", hostname="Site1-Edge1", reachable=True,
-        control_connections_up=2, bfd_sessions_up=4,
-        bfd_peers=["10.255.255.12", "10.255.255.13"], omp_peers_up=2,
+        system_ip="10.255.255.11",
+        hostname="Site1-Edge1",
+        reachable=True,
+        control_connections_up=2,
+        bfd_sessions_up=4,
+        bfd_peers=["10.255.255.12", "10.255.255.13"],
+        omp_peers_up=2,
     )
     base.update(overrides)
-    return FabricSnapshot(taken_at="2026-01-01T00:00:00+00:00",
-                          devices={base["system_ip"]: DeviceState(**base)})
+    return FabricSnapshot(
+        taken_at="2026-01-01T00:00:00+00:00",
+        devices={base["system_ip"]: DeviceState(**base)},
+    )
 
 
 def test_identical_snapshots_produce_no_findings():

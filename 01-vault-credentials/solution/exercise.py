@@ -21,10 +21,7 @@ class CredentialsError(RuntimeError):
 
 
 class ManagerCredentials(BaseModel):
-    url: str = Field(
-        ..., 
-        description="Manager address, e.g. 'https://manager.lab'"
-    )
+    url: str = Field(..., description="Manager address, e.g. 'https://manager.lab'")
     username: str
     password: str
 
@@ -64,7 +61,9 @@ def _from_vault() -> ManagerCredentials | None:
     except Exception as exc:
         # Re-raise with context. A raw hvac traceback ("InvalidRequest") tells
         # a student nothing; the address and the username tell them everything.
-        raise CredentialsError(f"Vault login failed at {addr} as {username!r}: {exc}") from exc
+        raise CredentialsError(
+            f"Vault login failed at {addr} as {username!r}: {exc}"
+        ) from exc
 
     # Belt and braces: hvac does not raise on every rejection path.
     if not client.is_authenticated():

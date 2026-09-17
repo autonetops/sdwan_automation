@@ -80,7 +80,9 @@ def _from_vault() -> ManagerCredentials | None:
     try:
         client.auth.userpass.login(username=username, password=password)
     except Exception as exc:
-        raise CredentialsError(f"Vault login failed at {addr} as {username!r}: {exc}") from exc
+        raise CredentialsError(
+            f"Vault login failed at {addr} as {username!r}: {exc}"
+        ) from exc
 
     if not client.is_authenticated():
         raise CredentialsError(

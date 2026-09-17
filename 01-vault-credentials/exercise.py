@@ -25,6 +25,7 @@ class CredentialsError(RuntimeError):
 # not four calls later, inside an HTTP request, as a KeyError.
 # ─────────────────────────────────────────────────────────────────────
 
+
 class ManagerCredentials(BaseModel):
     """Manager address and login."""
 
@@ -52,6 +53,7 @@ class ManagerCredentials(BaseModel):
 #
 # ─────────────────────────────────────────────────────────────────────
 
+
 def _from_vault() -> ManagerCredentials | None:
     """Log in to Vault and read the Manager secret.
 
@@ -76,18 +78,16 @@ def _from_vault() -> ManagerCredentials | None:
 
     # TODO 2.2: log in with userpass:
     #               client.auth.userpass.login(username=..., password=...)
-    #           Wrap it in try/except and re-raise as CredentialsError with
-    #           the address and username in the message. A bare hvac traceback
-    #           tells a student nothing; "Vault at X rejected ws07" tells them
-    #           everything.
 
-    # TODO 2.3: hvac does not always raise on a bad login. Confirm with
-    #           client.is_authenticated() and raise CredentialsError if False.
+    if not client.is_authenticated():
+        raise CredentialsError(
+            "Vault login failed. Check VAULT_USERNAME and VAULT_PASSWORD."
+        )
 
     # TODO 2.4: we are already using KV v2. Inspect the secret and store in data
     secret = client.secrets.kv.v2.read_secret_version(
-            path=path, mount_point=mount, raise_on_deleted_version=True
-        )
+        path=path, mount_point=mount, raise_on_deleted_version=True
+    )
     data: dict = {}
 
     # TODO 2.5: check that url, username and password are all present.
@@ -108,6 +108,7 @@ def _from_vault() -> ManagerCredentials | None:
 # place to change when the lab moves.
 # ─────────────────────────────────────────────────────────────────────
 
+
 def load_credentials() -> ManagerCredentials:
     """Return the Manager credentials from Vault."""
     # TODO 3.1: call _from_vault(). If it returns None, raise CredentialsError
@@ -127,6 +128,7 @@ def main() -> None:
 
     if "***" not in repr(creds):
         print("\n⚠️  Your __repr__ is leaking the password. Back to TODO 1.2.")
+
 
 if __name__ == "__main__":
     main()

@@ -6,7 +6,9 @@ import sys
 import requests
 import urllib3
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 from sdwan_toolkit.vault import load_credentials  # noqa: E402
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -28,7 +30,9 @@ def authenticate(base_url: str, username: str, password: str) -> requests.Sessio
 
     # The trap. 200 + HTML = a login failure disguised as success.
     if "<html" in resp.text[:512].lower():
-        raise RuntimeError("Invalid username or password (the Manager returned the login page).")
+        raise RuntimeError(
+            "Invalid username or password (the Manager returned the login page)."
+        )
 
     if "JSESSIONID" not in session.cookies:
         raise RuntimeError("Login did not return JSESSIONID.")

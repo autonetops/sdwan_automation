@@ -144,7 +144,9 @@ class SDWANClient:
         self._token = token_resp.text.strip()
         self.session.headers.update({"X-XSRF-TOKEN": self._token})
 
-        logger.info("Authenticated to %s as %s", self.base_url, self._credentials.username)
+        logger.info(
+            "Authenticated to %s as %s", self.base_url, self._credentials.username
+        )
         return self
 
     def logout(self) -> None:
@@ -163,7 +165,9 @@ class SDWANClient:
 
     # ── HTTP verbs ──────────────────────────────────────────────────
 
-    def request(self, method: str, path: str, *, unwrap: bool = True, **kwargs: Any) -> Any:
+    def request(
+        self, method: str, path: str, *, unwrap: bool = True, **kwargs: Any
+    ) -> Any:
         """Call with rate limiting, error handling and (optional) unwrapping.
 
         Args:
@@ -186,7 +190,9 @@ class SDWANClient:
                 f"403 on {path}: the X-XSRF-TOKEN expired. Call login() again."
             )
         if not resp.ok:
-            raise SDWANError(f"{method} {path} → HTTP {resp.status_code}: {resp.text[:300]}")
+            raise SDWANError(
+                f"{method} {path} → HTTP {resp.status_code}: {resp.text[:300]}"
+            )
 
         if not resp.content:
             return None

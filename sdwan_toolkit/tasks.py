@@ -44,7 +44,8 @@ class TaskResult:
     @property
     def failed_devices(self) -> list[dict[str, Any]]:
         return [
-            d for d in self.devices
+            d
+            for d in self.devices
             if str(d.get("status", "")).lower() in FAILURE_STATES
         ]
 
@@ -137,5 +138,7 @@ def wait_for_task(
                 "It may still be running on the Manager — check the GUI before retrying."
             )
 
-        logger.info("Task %s: %s (%.0fs)", task_id, last_status or "in_progress", elapsed)
+        logger.info(
+            "Task %s: %s (%.0fs)", task_id, last_status or "in_progress", elapsed
+        )
         time.sleep(interval)

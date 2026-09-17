@@ -5,7 +5,11 @@ import responses
 import json
 
 from sdwan_toolkit.client import SDWANClient
-from sdwan_toolkit.configgroup import deploy, preview_device_config, set_device_variables
+from sdwan_toolkit.configgroup import (
+    deploy,
+    preview_device_config,
+    set_device_variables,
+)
 from tests.conftest import BASE_URL
 
 GROUP_ID = "9491a7ce-0000-0000-0000-000000000001"
@@ -13,10 +17,16 @@ DEVICE_UUID = "C8K-PAYG-0000-0000-000000000001"
 
 
 def _mock_login_ok():
-    responses.add(responses.POST, f"{BASE_URL}/j_security_check", body="", status=200,
-                  headers={"Set-Cookie": "JSESSIONID=abc123; Path=/"})
-    responses.add(responses.GET, f"{BASE_URL}/dataservice/client/token",
-                  body="T", status=200)
+    responses.add(
+        responses.POST,
+        f"{BASE_URL}/j_security_check",
+        body="",
+        status=200,
+        headers={"Set-Cookie": "JSESSIONID=abc123; Path=/"},
+    )
+    responses.add(
+        responses.GET, f"{BASE_URL}/dataservice/client/token", body="T", status=200
+    )
 
 
 @responses.activate
@@ -59,12 +69,19 @@ def test_variables_roundtrip_renames_family_to_solution(credentials):
     responses.add(
         responses.PUT,
         f"{BASE_URL}/dataservice/v1/config-group/{GROUP_ID}/device/variables",
-        json={}, status=200,
+        json={},
+        status=200,
     )
     client = SDWANClient(credentials, min_interval=0).login()
-    payload = {"family": "sdwan",
-               "devices": [{"device-id": DEVICE_UUID,
-                            "variables": [{"name": "system_ip", "value": "101.1.1.1"}]}]}
+    payload = {
+        "family": "sdwan",
+        "devices": [
+            {
+                "device-id": DEVICE_UUID,
+                "variables": [{"name": "system_ip", "value": "101.1.1.1"}],
+            }
+        ],
+    }
     set_device_variables(client, GROUP_ID, payload)
     sent = json.loads(responses.calls[-1].request.body)
     assert sent["solution"] == "sdwan"
