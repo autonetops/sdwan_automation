@@ -21,8 +21,12 @@
 
 # ── TASK 4 ──────────────────────────────────────────────────────────
 # Read the Manager secret out of Vault.
+# Using count on a conditional data source is the idiomatic way to make it optional.
+# Objective: if var.credentials_from_vault = false, we should not query vault data.
+# If credentials_from_vault = true, we should query this data.
 data "vault_kv_secret_v2" "this" {
-  count = var.credentials_from_vault ? 1 : 0
+  # count is a meta-argument that controls how many instances 
+  # of a resource or data source are created.
 
   mount = var.vault_mount
   name  = var.vault_secret_path
@@ -36,6 +40,7 @@ locals {
   # not even configured, so no token is required to run PART A.
   vault_manager = one(data.vault_kv_secret_v2.this[*].data)
 
+  # variable = var.evaluated ? true_value : false_value
   manager = var.credentials_from_vault ? {
     url      = local.vault_manager["url"]
     username = local.vault_manager["username"]
