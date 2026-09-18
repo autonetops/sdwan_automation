@@ -6,19 +6,16 @@ other than you can read.
 
 | | | |
 |---|---|---|
-| **PART A** | the change itself | `main.tf` — TASK 1, 2, 3 |
-| **PART B** | credentials out of Vault | `vault.tf` — TASK 4 |
+| **PART A** | credentials out of Vault | `vault.tf` — TASK 1 |
+| **PART B** | the change itself | `main.tf` — TASK 2, 3, 4 |
 | **PART C** | state in GitLab | `backend.tf` — TASK 5 |
 
-PART A is the 45 minutes. PART B and PART C are ~15 minutes each: do them in
-the room if the clock allows, do them on the train home if it doesn't. They
-are the two steps between "it worked on my laptop" and "it runs without me".
+PART A is the 10 minutes. PART B 45 and PART C ~15 minutes each
 
 ## The point of this lesson
 
 It isn't that Terraform beats Python. It's that **Terraform is only usable by
-someone who understands what it's hiding** — which is exactly what you
-implemented by hand an hour ago.
+someone who understands what it's hiding**
 
 | Module 4 (imperative) | Module 5 (declarative) |
 |---|---|
@@ -44,7 +41,6 @@ implemented by hand an hour ago.
 # PART A — the change
 
 ```bash
-source ../scripts/vault-env.sh                  # exports TF_VAR_*
 cp terraform.tfvars.example terraform.tfvars    # set your "student" number
 
 terraform init
