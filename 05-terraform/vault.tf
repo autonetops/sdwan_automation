@@ -13,8 +13,7 @@
 #
 # The toggle is not production shape — in production you delete the branch
 # you don't use. It exists so PART A keeps working when Vault is down, and
-# so you can see both paths side by side. Note what it costs you: two ways
-# to do one thing is two ways to be wrong.
+# so you can see both paths side by side.
 # ─────────────────────────────────────────────────────────────────────
 
 
@@ -24,10 +23,9 @@
 # Using count on a conditional data source is the idiomatic way to make it optional.
 # Objective: if var.credentials_from_vault = false, we should not query vault data.
 # If credentials_from_vault = true, we should query this data.
-data "vault_kv_secret_v2" "this" {
+ephemeral "vault_kv_secret_v2" "this" {
   # count is a meta-argument that controls how many instances 
   # of a resource or data source are created.
-
   mount = var.vault_mount
   name  = var.vault_secret_path
 }

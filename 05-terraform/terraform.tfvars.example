@@ -4,7 +4,7 @@ banner_motd = "Managed by Terraform - Autonetops Bootcamp"
 
 credentials_from_vault = true
 vault_address     = "https://vault.autonetops.com"
-vault_username      = autonetops
-vault_password      = autonetops
+vault_username      = "autonetops"
+vault_password      = "autonetops"
 vault_mount       = "workshop"
 vault_secret_path = "sdwan"

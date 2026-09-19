@@ -1,6 +1,6 @@
 # Credentials Terraform fetches itself — module 5 PART B, unchanged.
 # The only secret in the pipeline is the Vault login.
-data "vault_kv_secret_v2" "manager" {
+ephemeral "vault_kv_secret_v2" "manager" {
   count = var.credentials_from_vault ? 1 : 0
 
   mount = var.vault_mount

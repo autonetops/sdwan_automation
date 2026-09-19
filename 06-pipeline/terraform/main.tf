@@ -36,7 +36,7 @@ resource "sdwan_system_feature_profile" "pipeline" {
       error_message = "No Manager credentials. Export VAULT_TOKEN, or set credentials_from_vault = false and provide TF_VAR_vmanage_*."
     }
 
-    # TODO 2.1: refuse the change when the data model names a device the
+    # TASK 2.1: refuse the change when the data model names a device the
     #           fabric has never heard of. `local.unknown_targets` in
     #           verify.tf already computes the list — you write the
     #           precondition block that acts on it.
@@ -45,7 +45,7 @@ resource "sdwan_system_feature_profile" "pipeline" {
     #           right severity here, because the alternative is deploying a
     #           change nobody can verify.
 
-    # TODO 2.2: refuse the change when a device THIS CHANGE TARGETS is
+    # TASK 2.2: refuse the change when a device THIS CHANGE TARGETS is
     #           already unreachable (`local.targets_down_before`).
     #
     #           The decision to justify in the README: why not refuse when

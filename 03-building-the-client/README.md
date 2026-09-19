@@ -56,7 +56,7 @@ cd 03-building-the-client
 python exercise.py
 ```
 
-TODOs: two in `__init__`/`from_vault`, three in the lifecycle, seven in
+TASKs: two in `__init__`/`from_vault`, three in the lifecycle, seven in
 `request()`/`_unwrap()`, four one-line verbs, two in `main()`.
 
 The offline suite is the spec. Your class must do what this one does:
@@ -103,8 +103,8 @@ unwrap=False).keys()` and look at what the convenience threw away.
 
 ## If you get stuck
 
-- `NotImplementedError` → that TODO is still open.
-- `AttributeError: 'SDWANClient' has no attribute 'base_url'` → TODO 1.1.
+- `NotImplementedError` → that TASK is still open.
+- `AttributeError: 'SDWANClient' has no attribute 'base_url'` → TASK 1.1.
 - Tests pass but the lab hangs → you called `self.limiter.wait()` inside the
   retry path, or not at all. It belongs at the top of `request()`.
 - Everything works but sessions pile up → `__exit__` isn't calling `logout()`.

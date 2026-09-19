@@ -25,7 +25,7 @@
 # authority the whole team plans against.
 #
 # ── TASK 5 ──────────────────────────────────────────────────────────
-# TODO 5.1: uncomment the block below, then:
+# TASK 5.1: uncomment the block below, then:
 #
 #     cp backend.hcl.example backend.hcl     # edit it: project id + state name
 #     export TF_HTTP_USERNAME="<your gitlab username>"

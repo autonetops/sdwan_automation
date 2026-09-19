@@ -47,7 +47,7 @@ terraform init
 terraform plan      # ← this will fail. On purpose.
 ```
 
-### TODO 2.1 — the planted error
+### TASK 2.1 — the planted error
 
 The `plan` will complain about a non-existent attribute on
 `sdwan_system_banner_feature`. **Don't google it.** Ask the provider itself:
@@ -108,7 +108,7 @@ terraform init      # the lock file has never seen the vault provider
 terraform plan      # ← this will fail too. Also on purpose.
 ```
 
-### TODO 4.1 — the KV v1/v2 trap
+### TASK 4.1 — the KV v1/v2 trap
 
 The shipped data source is `vault_kv_secret`, which reads a **KV v1** mount.
 The bootcamp's `secret/` is **KV v2**. They are different APIs wearing the
@@ -206,7 +206,7 @@ GitLab serves Terraform state on every tier: the standard `http` backend with
 GitLab as the server.
 
 ```bash
-# 1. Uncomment the backend block in backend.tf (TODO 5.1)
+# 1. Uncomment the backend block in backend.tf (TASK 5.1)
 
 # 2. Addresses go in a file...
 cp backend.hcl.example backend.hcl     # fill in PROJECT_ID and your state name

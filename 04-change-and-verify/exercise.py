@@ -78,7 +78,7 @@ def my_prefix() -> str:
 
 def count_up(rows: list[dict], *fields: str) -> int:
     """Count rows whose state field indicates 'up' (or 'ok')."""
-    # TODO 1.1: for each row, check each candidate field in `fields`.
+    # TASK 1.1: for each row, check each candidate field in `fields`.
     #           Normalize with str(...).lower() before comparing.
     #           Count each row ONCE, even if two fields match.
     return 0
@@ -100,7 +100,7 @@ def collect(client: SDWANClient, device) -> DeviceState:
         reachable=device.is_reachable,
     )
 
-    # TODO 2.1: if the device is NOT reachable, return `state` right now.
+    # TASK 2.1: if the device is NOT reachable, return `state` right now.
     #           Querying a device that is down only burns timeouts — and in a
     #           shared lab, your timeouts are everyone's latency.
 
@@ -109,7 +109,7 @@ def collect(client: SDWANClient, device) -> DeviceState:
         get_control_connections(client, device.system_ip), "state", "status"
     )
 
-    # TODO 2.2: for edges ONLY (device.is_edge), collect the BFD sessions.
+    # TASK 2.2: for edges ONLY (device.is_edge), collect the BFD sessions.
     #           Store the count in state.bfd_sessions_up, and the sorted list
     #           of `system-ip` of the peers that are up in state.bfd_peers.
     #
@@ -164,14 +164,14 @@ def print_snapshot(snapshot: FabricSnapshot) -> None:
 
 def my_config_group(client: SDWANClient):
     """Return the ConfigGroup whose name starts with your prefix."""
-    # TODO 3.1: list the config groups and return the first whose `name`
+    # TASK 3.1: list the config groups and return the first whose `name`
     #           starts with my_prefix(). If none matches, raise SystemExit
     #           with a message that says what to check — not "not found".
     return None
 
 
 def show_preview(client: SDWANClient, group_id: str, device_uuid: str) -> None:
-    # TODO 3.2: call preview_device_config and print the result.
+    # TASK 3.2: call preview_device_config and print the result.
     #           Then actually read it: can you point at the line that will
     #           change? If you can't, you are not ready to deploy.
     pass
@@ -193,17 +193,17 @@ def show_preview(client: SDWANClient, group_id: str, device_uuid: str) -> None:
 
 def run_deploy(client: SDWANClient, group_id: str, device_uuids: list[str]):
     """Trigger the deployment and wait for it. Returns the TaskResult."""
-    # TODO 4.1: POST to /v1/config-group/{group_id}/device/deploy
+    # TASK 4.1: POST to /v1/config-group/{group_id}/device/deploy
     #           with {"devices": [{"id": uuid}, ...]}
     response = None
 
-    # TODO 4.2: pull out the task id (key "parentTaskId", with "id" as a
+    # TASK 4.2: pull out the task id (key "parentTaskId", with "id" as a
     #           backup — the name changed between releases). If neither is
     #           there, raise RuntimeError. Returning a silent success here
     #           would be the single worst thing this script could do.
     task_id = None
 
-    # TODO 4.3: call wait_for_task(). Pick a realistic timeout: a multi-site
+    # TASK 4.3: call wait_for_task(). Pick a realistic timeout: a multi-site
     #           deployment easily passes 5 minutes, and a false timeout makes
     #           people re-run the deploy — which is worse than waiting.
     #
@@ -242,7 +242,7 @@ def change_and_verify(client: SDWANClient, group, device_uuids: list[str]) -> bo
         return False
     print(result.summary())
 
-    # TODO 5.1: ⏱️ WAIT before snapshotting again. BFD and OMP do not
+    # TASK 5.1: ⏱️ WAIT before snapshotting again. BFD and OMP do not
     #           reconverge the instant a task reports "success". Snapshot too
     #           early and you report a regression that isn't real — and a
     #           pipeline that cries wolf is a pipeline people switch off.
@@ -253,7 +253,7 @@ def change_and_verify(client: SDWANClient, group, device_uuids: list[str]) -> bo
     print_snapshot(after)
     after.save("snapshots/after.json")
 
-    # TODO 5.2: compare(before, after), print the .report(), and return .ok
+    # TASK 5.2: compare(before, after), print the .report(), and return .ok
     #
     #           Then read the report and ask the uncomfortable question:
     #           compare() only looks at the DIFFERENCE. A device that was
@@ -299,7 +299,7 @@ def main() -> int:
             print_snapshot(snapshot)
             print(f"\nSnapshot written to {snapshot.save(args.snapshot)}")
 
-            # TODO 2.3: which edge has the MOST BFD sessions up?
+            # TASK 2.3: which edge has the MOST BFD sessions up?
             #           That is half of your module 4 answer.
             return 0
 

@@ -39,16 +39,16 @@ def authenticate(base_url: str, username: str, password: str) -> requests.Sessio
     session = requests.Session()
     session.verify = False  # lab with a self-signed certificate
 
-    # TODO 1.1: POST to /j_security_check with the form data.
+    # TASK 1.1: POST to /j_security_check with the form data.
     #           Hint: Content-Type: application/x-www-form-urlencoded
     #           Hint: data={"j_username": ..., "j_password": ...}
 
-    # TODO 1.2: detect the trap. If "<html" shows up at the start of the
+    # TASK 1.2: detect the trap. If "<html" shows up at the start of the
     #           response body, raise RuntimeError("invalid username or password").
 
-    # TODO 1.3: confirm the JSESSIONID cookie landed in session.cookies.
+    # TASK 1.3: confirm the JSESSIONID cookie landed in session.cookies.
 
-    # TODO 1.4: fetch the token from /dataservice/client/token and put it in
+    # TASK 1.4: fetch the token from /dataservice/client/token and put it in
     #           session.headers as "X-XSRF-TOKEN".
 
     return session
@@ -65,7 +65,7 @@ def authenticate(base_url: str, username: str, password: str) -> requests.Sessio
 
 def list_devices(session: requests.Session, base_url: str) -> list[dict]:
     """Return the device list, already unwrapped from 'data'."""
-    # TODO 2.1: perform the GET and return resp.json()["data"].
+    # TASK 2.1: perform the GET and return resp.json()["data"].
     return []
 
 
@@ -84,7 +84,7 @@ def main() -> None:
     devices = list_devices(session, creds.url)
 
     if not devices:
-        print("No devices. Are the TODOs still open?")
+        print("No devices. Are the TASKs still open?")
         return
 
     print(f"\n{'HOSTNAME':<20} {'SYSTEM-IP':<16} {'TYPE':<10} {'SITE':<6} REACHABLE")
@@ -98,7 +98,7 @@ def main() -> None:
             f"{d.get('reachability', '?')}"
         )
 
-    # TODO 3.1: how many WAN Edges (personality other than vmanage/vsmart/vbond)
+    # TASK 3.1: how many WAN Edges (personality other than vmanage/vsmart/vbond)
     #           are 'reachable'? Note the number — that is your answer.
     #       Try with filter(func, iterable) or a list comprehension.
     edges = [

@@ -33,7 +33,7 @@ written *on top of* what you wrote — which is why `state.py`, `tasks.py` and
 `configgroup.py` are each under 170 lines.
 
 Module 6 carries a `+` for the same reason, and splits in two: PART A is the
-pipeline itself (`.gitlab-ci.yml`, six TODOs) and PART B is the Terraform
+pipeline itself (`.gitlab-ci.yml`, six TASKs) and PART B is the Terraform
 that lets the fabric refuse its own change (four TASKs). PART A is the 30
 minutes; PART B and the extensions at the end of its README are the
 take-home.
@@ -102,7 +102,7 @@ One Manager for the whole class. Two rules that aren't bureaucracy:
 
 ## Studying afterwards
 
-Every module has an `exercise.py` with TODOs and a `solution/` folder with the
+Every module has an `exercise.py` with TASKs and a `solution/` folder with the
 finished, annotated version. Compare them — but only after you've tried.
 
 The test suite runs **with no lab at all**, against a fake Manager in

@@ -74,7 +74,7 @@ data "sdwan_device" "after" {
 
   lifecycle {
     postcondition {
-      # TODO 3.1: assert that every hostname in `local.targets` is still
+      # TASK 3.1: assert that every hostname in `local.targets` is still
       #           reachable. Replace the `true` below.
       #
       #           `self` is how a postcondition refers to the object it is
@@ -116,7 +116,7 @@ check "shared_lab_health" {
   data "sdwan_device" "observed" {}
 
   assert {
-    # TODO 4.1: warn when ANY device in the lab is unreachable, not just
+    # TASK 4.1: warn when ANY device in the lab is unreachable, not just
     #           your targets. Replace the `true`.
     #
     #           Then answer the question this raises: you now have the same

@@ -43,7 +43,7 @@ cd 02-connecting-to-manager
 python exercise.py
 ```
 
-Four TODOs in `authenticate()`, one in `list_devices()`, one in `main()`.
+Four TASKs in `authenticate()`, one in `list_devices()`, one in `main()`.
 
 Write it with plain `requests` and plain functions. Deliberately: you need to
 feel the session, the cookie and the token as separate things before you wrap
@@ -61,8 +61,8 @@ That answer isn't anywhere in the repository. Only the fabric knows.
   Back to module 1.
 - `SSLError` → you're missing `session.verify = False` (the lab has a
   self-signed certificate).
-- `KeyError: 'data'` → you fell into the HTTP 200 trap. Back to TODO 1.2.
-- `403` on a POST → the `X-XSRF-TOKEN` is missing. Back to TODO 1.4.
+- `KeyError: 'data'` → you fell into the HTTP 200 trap. Back to TASK 1.2.
+- `403` on a POST → the `X-XSRF-TOKEN` is missing. Back to TASK 1.4.
 
 ## Afterwards
 

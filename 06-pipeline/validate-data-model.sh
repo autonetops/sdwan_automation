@@ -69,7 +69,7 @@ check "the login banner is not empty" \
 # notices — which is how CHANGEME ends up in a customer screenshot.
 check "no placeholder text in the banners" \
   '[.sdwan.system.banner.motd, .sdwan.system.banner.login]
-   | map(test("(?i)CHANGEME|TODO|FIXME|XXX")) | any | not'
+   | map(test("(?i)CHANGEME|TASK|FIXME|XXX")) | any | not'
 
 # IOS-XE terminates a banner with a delimiter, and the rendered CLI uses ^C.
 # Text carrying the delimiter truncates the banner there: the config applies,

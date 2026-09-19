@@ -29,11 +29,11 @@ class CredentialsError(RuntimeError):
 class ManagerCredentials(BaseModel):
     """Manager address and login."""
 
-    # TODO 1.1: declare three required fields — url, username, password —
+    # TASK 1.1: declare three required fields — url, username, password —
     #           all `str`. Pydantic makes them mandatory by default; that is
     #           the point.
 
-    # TODO 1.2: override __repr__ so the password NEVER appears.
+    # TASK 1.2: override __repr__ so the password NEVER appears.
     #           Return something like:
     #               ManagerCredentials(url='https://…', username='admin', password='***')
     #
@@ -63,7 +63,7 @@ def _from_vault() -> ManagerCredentials | None:
     username = os.getenv("VAULT_USERNAME")
     password = os.getenv("VAULT_PASSWORD")
 
-    # TODO 2.1: if there is no password in the environment, return None.
+    # TASK 2.1: if there is no password in the environment, return None.
     #           Don't raise here — "unconfigured" and "broken" are different
     #           conditions and deserve different messages.
 
@@ -76,7 +76,7 @@ def _from_vault() -> ManagerCredentials | None:
     # you are talking to the real Vault.
     client = hvac.Client(url=addr, verify=False)
 
-    # TODO 2.2: log in with userpass:
+    # TASK 2.2: log in with userpass:
     #               client.auth.userpass.login(username=..., password=...)
 
     if not client.is_authenticated():
@@ -84,17 +84,17 @@ def _from_vault() -> ManagerCredentials | None:
             "Vault login failed. Check VAULT_USERNAME and VAULT_PASSWORD."
         )
 
-    # TODO 2.4: we are already using KV v2. Inspect the secret and store in data
+    # TASK 2.4: we are already using KV v2. Inspect the secret and store in data
     secret = client.secrets.kv.v2.read_secret_version(
         path=path, mount_point=mount, raise_on_deleted_version=True
     )
     data: dict = {}
 
-    # TODO 2.5: check that url, username and password are all present.
+    # TASK 2.5: check that url, username and password are all present.
     #           If any is missing, raise CredentialsError naming WHICH ones.
     #           "Something went wrong" costs the next person twenty minutes.
 
-    # TODO 2.6: return a ManagerCredentials. Strip whitespace from the url and
+    # TASK 2.6: return a ManagerCredentials. Strip whitespace from the url and
     #           drop any trailing "/" — a stored "https://mgr.lab/" would
     #           otherwise produce "https://mgr.lab//dataservice/device".
     return None
@@ -111,10 +111,10 @@ def _from_vault() -> ManagerCredentials | None:
 
 def load_credentials() -> ManagerCredentials:
     """Return the Manager credentials from Vault."""
-    # TODO 3.1: call _from_vault(). If it returns None, raise CredentialsError
+    # TASK 3.1: call _from_vault(). If it returns None, raise CredentialsError
     #           telling the student exactly which variables to export.
     #           Otherwise return the credentials.
-    raise NotImplementedError("TODO 3.1")
+    raise NotImplementedError("TASK 3.1")
 
 
 def main() -> None:
@@ -127,7 +127,7 @@ def main() -> None:
     print(f"\n  repr()   : {creds!r}")
 
     if "***" not in repr(creds):
-        print("\n⚠️  Your __repr__ is leaking the password. Back to TODO 1.2.")
+        print("\n⚠️  Your __repr__ is leaking the password. Back to TASK 1.2.")
 
 
 if __name__ == "__main__":

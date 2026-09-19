@@ -61,7 +61,7 @@ cd 01-vault-credentials
 python exercise.py
 ```
 
-Six TODOs in `_from_vault()`, two in `ManagerCredentials`, one in
+Six TASKs in `_from_vault()`, two in `ManagerCredentials`, one in
 `load_credentials()`.
 
 Validate the parts that don't need Vault to be up:
@@ -92,7 +92,7 @@ That answer isn't anywhere in this repository. Only Vault knows.
 - `CredentialsError: No credentials` → `VAULT_PASSWORD` isn't exported.
 - `Vault login failed … permission denied` → wrong username or password.
 - `KeyError: 'url'` on a secret you can see in the UI → you unwrapped once
-  instead of twice. Back to TODO 2.4.
+  instead of twice. Back to TASK 2.4.
 - `InvalidPath` → the mount or path is wrong. Defaults are `workshop` /
   `sdwan`; override with `VAULT_SDWAN_MOUNT` / `VAULT_SDWAN_PATH`.
 

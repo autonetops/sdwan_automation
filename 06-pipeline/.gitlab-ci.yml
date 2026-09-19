@@ -3,8 +3,8 @@
 #
 # This file is the exercise. It is a copy of the repository's root
 # .gitlab-ci.yml with six pieces cut out of it, and your job is to put them
-# back. Everything else is given, comments included — read those, they are
-# half the lesson.
+# back. Everything else is given, comments included (read those, they are
+# half the lesson)
 #
 # GitLab only reads .gitlab-ci.yml at the ROOT of the repository, so this
 # file does nothing where it sits. That is deliberate: you can break it
@@ -48,17 +48,17 @@
 #   ┌──────────────────┬──────────┬──────┬────────┬──────┬────────┐
 #   │                  │ validate │ plan │ deploy │ test │ notify │
 #   ├──────────────────┼──────────┼──────┼────────┼──────┼────────┤
-#   │ feature branch   │    ✅    │  ❌  │   ❌   │  ❌  │   ❌   │
-#   │ merge request    │    ✅    │  ✅  │   ❌   │  ❌  │   ❌   │
-#   │ default branch   │    ✅    │  ✅  │ ✅ man │  ✅  │   ✅   │
+#   │ feature branch   │    ✅   │  ❌  │   ❌  │  ❌  │   ❌  │
+#   │ merge request    │    ✅   │  ✅  │   ❌  │  ❌  │   ❌  │
+#   │ default branch   │    ✅   │  ✅  │ ✅ man│  ✅  │   ✅  │
 #   └──────────────────┴──────────┴──────┴────────┴──────┴────────┘
 #
 # The asymmetry is the design. Anyone may propose a change and see it
 # checked. Only the default branch may touch the fabric, and only after a
-# human presses a button.
+# human validates.
 # ─────────────────────────────────────────────────────────────────────
 
-# ── TODO 1 ──────────────────────────────────────────────────────────
+# ── TASK 1 ──────────────────────────────────────────────────────────
 # Stages run in the order they are declared here, and every job below names
 # one of them. These five are correct — and sorted alphabetically, which is
 # not the order anything should happen in.
@@ -88,7 +88,7 @@ variables:
   # model. GitLab clones shallow by default, and a depth of 1 has no HEAD~1
   # — the rollback would find nothing to roll back to, at the exact moment
   # it matters.
-  GIT_DEPTH: "20"
+  GIT_DEPTH: "5"
 
   # ── What the pipeline acts on ─────────────────────────────────────
   DATA_MODEL: "06-pipeline/data/fabric.yaml"
@@ -145,8 +145,12 @@ variables:
   TF_HTTP_USERNAME: "gitlab-ci-token"
   TF_HTTP_PASSWORD: "${CI_JOB_TOKEN}"
 
+  # TASK 0 - ADD A VARIABLE TO REFERENCE THE DEFAULT IMAGE USED IN THE PIPELINE. This is the image that will be used for jobs that do not specify a different image.
+  
+
 default:
-  image: alpine:3.20
+  # TASK 0.1 - Use the variable you just created to set the default image for the pipeline. This will ensure that all jobs use this image unless they specify a different one.
+  image: 
   tags:
     - docker
 
@@ -205,7 +209,7 @@ data-model-validate:
   # SHAPE of it is terraform-validate's job, below — re-implementing the
   # schema here would be a second source of truth about it.
   #
-  # ── TODO 2 ────────────────────────────────────────────────────────
+  # ── TASK 2 ────────────────────────────────────────────────────────
   # Run 06-pipeline/validate-data-model.sh against the data model. One line.
   #
   # Two things to get right, and they are the whole anatomy of a CI job:
@@ -221,7 +225,7 @@ data-model-validate:
   # anything to make that work — but you do have to not swallow it, which is
   # what `|| true` at the end of a line would do.
   script:
-    - echo "TODO 2 — run the data model validator here"
+    - echo "TASK 2 — run the data model validator here"
 
 terraform-validate:
   stage: validate
@@ -296,7 +300,7 @@ plan:
     # the redacted one, keep the other. It is also why the deploy job
     # re-plans instead of receiving this file.
     - rm -f "${TF_DIR}/tfplan"
-  # ── TODO 3 ────────────────────────────────────────────────────────
+  # ── TASK 3 ────────────────────────────────────────────────────────
   # Two blocks missing here: `artifacts:` and `rules:`.
   #
   # a) artifacts — publish tfplan.txt and keep it for a week. Without this,
@@ -413,14 +417,14 @@ deploy:
     paths:
       - outputs.json
     expire_in: 1 month
-  # ── TODO 4 ────────────────────────────────────────────────────────
+  # ── TASK 4 ────────────────────────────────────────────────────────
   # The most important four lines in this file. This is the only job that
   # writes to the fabric, and right now it has no `rules:` at all — which
   # means it runs on every push, on every branch, automatically.
   #
   # Write the rule that makes it: default branch only, and never by itself.
   #
-  #   • the same predefined variable you used in TODO 3, for the branch;
+  #   • the same predefined variable you used in TASK 3, for the branch;
   #   • `when: manual` — the job appears and WAITS. A human presses it.
   #   • `allow_failure: false` — redundant here, and write it anyway.
   #
@@ -470,7 +474,7 @@ test-idempotency:
     - *vault_login
   script:
     - terraform -chdir="${TF_DIR}" init -input=false
-    # ── TODO 5 ──────────────────────────────────────────────────────
+    # ── TASK 5 ──────────────────────────────────────────────────────
     # Run the plan again and fail the job if it is not empty.
     #
     # `terraform plan -detailed-exitcode` is the whole job, and it is the
@@ -501,7 +505,7 @@ test-idempotency:
       code=$?
       set -e
       cat idempotency.txt
-      echo "TODO 5 — interpret $code here (0 = clean, 2 = drift, else = error)"
+      echo "TASK 5 — interpret $code here (0 = clean, 2 = drift, else = error)"
   artifacts:
     when: always
     paths:
@@ -552,7 +556,7 @@ notify-success:
     HEADLINE: "SD-WAN fabric change deployed, verified and idempotent"
   script:
     - *slack
-  # ── TODO 6a ───────────────────────────────────────────────────────
+  # ── TASK 6a ───────────────────────────────────────────────────────
   # Runs on the default branch, only when SLACK_WEBHOOK_URL exists, and
   # only when everything before it succeeded.
   #
@@ -573,7 +577,7 @@ notify-failure:
     HEADLINE: "SD-WAN fabric pipeline FAILED"
   script:
     - *slack
-  # ── TODO 6b ───────────────────────────────────────────────────────
+  # ── TASK 6b ───────────────────────────────────────────────────────
   # The same rule as 6a with one word changed — the word that makes this
   # the job that speaks when something went wrong.
   #

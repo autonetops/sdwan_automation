@@ -27,7 +27,7 @@ own change. What you write is the pipeline, and the Terraform under it:
 
 | | | |
 |---|---|---|
-| **PART A** | the pipeline | `.gitlab-ci.yml` — TODO 1 to 6 |
+| **PART A** | the pipeline | `.gitlab-ci.yml` — TASK 1 to 6 |
 | **PART B** | the verification | `terraform/` — TASK 1 to 4 |
 
 PART A is the shape: which jobs run, on which branches, and who is allowed to
@@ -198,12 +198,12 @@ reading those is half the exercise.
 
 | | Where | What |
 |---|---|---|
-| **TODO 1** | `stages:` | Five correct stages, sorted alphabetically. Put them in running order. |
-| **TODO 2** | `data-model-validate` | The job's `script:`. One line, two things to get right. |
-| **TODO 3** | `plan` | `artifacts:` (what the reviewer opens) and `rules:` (MR + default branch). |
-| **TODO 4** | `deploy` | The four lines that stop this job running on every push. |
-| **TODO 5** | `test-idempotency` | Turn `terraform plan -detailed-exitcode`'s three exit codes into a verdict. |
-| **TODO 6** | `notify-*` | `on_success` vs `on_failure`, and why one job has no `needs:`. |
+| **TASK 1** | `stages:` | Five correct stages, sorted alphabetically. Put them in running order. |
+| **TASK 2** | `data-model-validate` | The job's `script:`. One line, two things to get right. |
+| **TASK 3** | `plan` | `artifacts:` (what the reviewer opens) and `rules:` (MR + default branch). |
+| **TASK 4** | `deploy` | The four lines that stop this job running on every push. |
+| **TASK 5** | `test-idempotency` | Turn `terraform plan -detailed-exitcode`'s three exit codes into a verdict. |
+| **TASK 6** | `notify-*` | `on_success` vs `on_failure`, and why one job has no `needs:`. |
 
 GitLab only reads `.gitlab-ci.yml` at the **root** of the repository, so the
 exercise copy does nothing where it sits. Break it freely. Two ways to check
@@ -291,10 +291,10 @@ is `when: manual` behind the `fabric-lab` environment. Press it.
 
 ## The decisions these ask for
 
-Several TODOs and TASKs don't have one right answer. They have a
+Several TASKs and TASKs don't have one right answer. They have a
 **justification** — write yours down, in the MR description or here.
 
-### TODO 4 — `allow_failure: false` is redundant. Why write it?
+### TASK 4 — `allow_failure: false` is redundant. Why write it?
 
 Because GitLab gives the same two words two different defaults depending on
 where you put them:
@@ -311,7 +311,7 @@ default — but nobody reading the file should have to know that to trust it,
 and a refactor that lifts `when: manual` out of `rules:` would flip it
 silently.
 
-### TODO 6 — why does `notify-failure` have no `needs:`?
+### TASK 6 — why does `notify-failure` have no `needs:`?
 
 `needs:` ties a job to specific upstream jobs. A failure notifier tied to
 `deploy` never fires when `validate` was what failed — and the change that
@@ -430,7 +430,7 @@ you least want a broken notifier.
 
 ```
 06-pipeline/
-├── .gitlab-ci.yml             ← YOU COMPLETE THIS (PART A, TODO 1-6)
+├── .gitlab-ci.yml             ← YOU COMPLETE THIS (PART A, TASK 1-6)
 │                                inert where it sits; GitLab reads the root one
 ├── data/fabric.yaml           THE CHANGE. The only file you edit.
 ├── validate-data-model.sh     stage 1 — the semantic rules, in yq

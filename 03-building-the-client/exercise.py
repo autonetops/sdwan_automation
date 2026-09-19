@@ -117,7 +117,7 @@ class SDWANClient:
         timeout: int = 60,
         min_interval: float = 0.34,
     ) -> None:
-        # TODO 1.1: store what every method will need:
+        # TASK 1.1: store what every method will need:
         #             self.base_url   — credentials.url with any trailing "/" removed
         #             self._credentials
         #             self.timeout
@@ -128,21 +128,21 @@ class SDWANClient:
         #           Note `verify` is a parameter with a default, not a
         #           hardcoded False. The lab needs False; production needs
         #           True; the same class serves both.
-        raise NotImplementedError("TODO 1.1")
+        raise NotImplementedError("TASK 1.1")
 
     # ── constructors ────────────────────────────────────────────────
 
     @classmethod
     def from_vault(cls, **kwargs: Any) -> "SDWANClient":
         """Load credentials, authenticate, return a ready client."""
-        # TODO 1.2: build the client with load_credentials(), call .login()
+        # TASK 1.2: build the client with load_credentials(), call .login()
         #           on it, and return it.
         #
         #           Why a classmethod and not a flag on __init__? Because
         #           "construct" and "perform network I/O" are different jobs.
         #           Tests build SDWANClient(fake_creds) with no Vault and no
         #           Manager anywhere — look at tests/test_client.py.
-        raise NotImplementedError("TODO 1.2")
+        raise NotImplementedError("TASK 1.2")
 
     # ─────────────────────────────────────────────────────────────────
     # TASK 2 — Lifecycle: login, logout, and the `with` that guarantees it
@@ -150,7 +150,7 @@ class SDWANClient:
 
     def login(self) -> "SDWANClient":
         """The two-step handshake. Same as module 2, now on self."""
-        # TODO 2.1: port `authenticate()` above into this method.
+        # TASK 2.1: port `authenticate()` above into this method.
         #           - use self.session, self.base_url, self.timeout
         #           - credentials come from self._credentials
         #           - store the token in self._token AND in the session headers
@@ -158,11 +158,11 @@ class SDWANClient:
         #             trap and the missing cookie — a caller can now catch the
         #             specific failure instead of every RuntimeError in Python
         #           - return self, so `SDWANClient(creds).login()` chains
-        raise NotImplementedError("TODO 2.1")
+        raise NotImplementedError("TASK 2.1")
 
     def logout(self) -> None:
         """Hand the session back. Manager sessions are a finite resource."""
-        # TODO 2.2: POST to {base_url}/logout?nocache=true, then close the
+        # TASK 2.2: POST to {base_url}/logout?nocache=true, then close the
         #           session.
         #
         #           ⚠️ Best effort: wrap the POST in try/except
@@ -170,9 +170,9 @@ class SDWANClient:
         #              session in a `finally`. If logout fails you don't want
         #              to mask the real exception that got you here — and the
         #              session will expire on its own anyway.
-        raise NotImplementedError("TODO 2.2")
+        raise NotImplementedError("TASK 2.2")
 
-    # TODO 2.3: implement __enter__ and __exit__ so this works:
+    # TASK 2.3: implement __enter__ and __exit__ so this works:
     #
     #               with SDWANClient.from_vault() as mgr:
     #                   ...
@@ -203,42 +203,42 @@ class SDWANClient:
                 Pass False when the response has sibling fields you need —
                 module 4 needs exactly that.
         """
-        # TODO 3.1: make the /dataservice prefix optional. If `path` doesn't
+        # TASK 3.1: make the /dataservice prefix optional. If `path` doesn't
         #           start with "/dataservice", prepend it. Callers should be
         #           able to write "/device" or "/dataservice/device" and get
         #           the same result.
 
-        # TODO 3.2: self.limiter.wait() — BEFORE the call, always. Not in
+        # TASK 3.2: self.limiter.wait() — BEFORE the call, always. Not in
         #           get() only: a deploy loop hammers POST just as hard.
 
-        # TODO 3.3: perform the call with self.session.request(method, url,
+        # TASK 3.3: perform the call with self.session.request(method, url,
         #           timeout=self.timeout, **kwargs).
 
-        # TODO 3.4: a 403 whose body mentions XSRF gets its own message —
+        # TASK 3.4: a 403 whose body mentions XSRF gets its own message —
         #           "the X-XSRF-TOKEN expired, call login() again". It is a
         #           different problem from "you lack permission", and the
         #           generic message sends people down the wrong path.
 
-        # TODO 3.5: any other non-ok status → raise SDWANError including the
+        # TASK 3.5: any other non-ok status → raise SDWANError including the
         #           method, the path, the status code and the first ~300 chars
         #           of the body. The body is where the Manager says what it
         #           actually disliked.
 
-        # TODO 3.6: return the payload:
+        # TASK 3.6: return the payload:
         #             - empty body            → None
         #             - not JSON              → resp.text
         #             - JSON, unwrap=True     → self._unwrap(payload)
         #             - JSON, unwrap=False    → payload
-        raise NotImplementedError("TODO 3.1–3.6")
+        raise NotImplementedError("TASK 3.1–3.6")
 
     @staticmethod
     def _unwrap(payload: Any) -> Any:
         """Strip the `{"data": ...}` envelope when it is present."""
-        # TODO 3.7: if payload is a dict containing "data", return payload["data"].
+        # TASK 3.7: if payload is a dict containing "data", return payload["data"].
         #           Otherwise return it untouched — not every endpoint wraps,
         #           and assuming they all do is how you get a KeyError in the
         #           one place you didn't test.
-        raise NotImplementedError("TODO 3.7")
+        raise NotImplementedError("TASK 3.7")
 
     # ─────────────────────────────────────────────────────────────────
     # TASK 4 — The verbs
@@ -248,20 +248,20 @@ class SDWANClient:
     # ─────────────────────────────────────────────────────────────────
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        # TODO 4.1
-        raise NotImplementedError("TODO 4.1")
+        # TASK 4.1
+        raise NotImplementedError("TASK 4.1")
 
     def post(self, path: str, json: Any = None) -> Any:
-        # TODO 4.2
-        raise NotImplementedError("TODO 4.2")
+        # TASK 4.2
+        raise NotImplementedError("TASK 4.2")
 
     def put(self, path: str, json: Any = None) -> Any:
-        # TODO 4.3
-        raise NotImplementedError("TODO 4.3")
+        # TASK 4.3
+        raise NotImplementedError("TASK 4.3")
 
     def delete(self, path: str) -> Any:
-        # TODO 4.4
-        raise NotImplementedError("TODO 4.4")
+        # TASK 4.4
+        raise NotImplementedError("TASK 4.4")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -286,7 +286,7 @@ def main() -> None:
                 f"{d.get('reachability', '?')}"
             )
 
-        # TODO 5.1: call the SAME endpoint with unwrap=False:
+        # TASK 5.1: call the SAME endpoint with unwrap=False:
         #
         #               raw = mgr.request("GET", "/device", unwrap=False)
         #
@@ -295,7 +295,7 @@ def main() -> None:
         #           `summary` alongside `data`, and `summary` is the only place
         #           the task state lives. Unwrap it and you lose the answer.
 
-        # TODO 5.2: the configuration-database view, for your answer below:
+        # TASK 5.2: the configuration-database view, for your answer below:
         #               controllers = mgr.get("/system/device/controllers")
         #           Each row carries a `version`. Which release is the lab
         #           Manager running?

@@ -12,7 +12,7 @@
 # ─────────────────────────────────────────────────────────────────────
 
 locals {
-  # TODO 1.1: this is the wrong decoder, and `terraform plan` will tell you
+  # TASK 1.1: this is the wrong decoder, and `terraform plan` will tell you
   #           so in its first ten lines. Fix the one word.
   #
   #           Not a trick question — but worth noticing that Terraform ships
