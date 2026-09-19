@@ -61,9 +61,6 @@ variables:
 
   # ── Vault ─────────────────────────────────────────────────────────
   # Addresses, not secrets — the login is the CI/CD variable.
-  VAULT_ADDR: "https://vault.autonetops.com"
-  VAULT_USERNAME: "${VAULT_USERNAME}"  # masked CI/CD variable
-  VAULT_PASSWORD: "${VAULT_PASSWORD}"  # protected, masked CI/CD variable
   TF_VAR_vault_address: "${VAULT_ADDR}"
   TF_VAR_vault_mount: "workshop"
   TF_VAR_vault_secret_path: "sdwan"
@@ -92,9 +89,10 @@ variables:
   # Terraform root and creates its own config group. Two states that both
   # believe they own one object is a fight nobody wins.
   TF_STATE_NAME: "sdwan-pipeline"
-  TF_HTTP_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
-  TF_HTTP_LOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
-  TF_HTTP_UNLOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+  TF_HTTP_ADDRESS: "${TF_STATE_API_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
+  #TF_HTTP_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}" # This is the correct form
+  TF_HTTP_LOCK_ADDRESS: "${TF_STATE_API_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+  TF_HTTP_UNLOCK_ADDRESS: "${TF_STATE_API_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
   # GitLab's state API expects these verbs; they are not the backend's
   # defaults, and getting them wrong produces a 404 at lock time that reads
   # like the state does not exist.

@@ -8,7 +8,7 @@ ephemeral "vault_kv_secret_v2" "manager" {
 }
 
 locals {
-  vault_manager = one(data.vault_kv_secret_v2.manager[*].data)
+  vault_manager = one(ephemeral.vault_kv_secret_v2.manager[*].data)
 
   manager = var.credentials_from_vault ? {
     url      = local.vault_manager["url"]
