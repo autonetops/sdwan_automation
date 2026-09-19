@@ -62,11 +62,13 @@ variables:
   # ── Vault ─────────────────────────────────────────────────────────
   # Addresses, not secrets — the login is the CI/CD variable.
   VAULT_ADDR: "https://vault.autonetops.com"
+  VAULT_USERNAME: "${VAULT_USERNAME}"  # masked CI/CD variable
+  VAULT_PASSWORD: "${VAULT_PASSWORD}"  # protected, masked CI/CD variable
   TF_VAR_vault_address: "${VAULT_ADDR}"
   TF_VAR_vault_mount: "workshop"
   TF_VAR_vault_secret_path: "sdwan"
 
-  TERRAFORM_VERSION: "1.9.8"
+  TERRAFORM_VERSION: "1.16.3"
   YQ_VERSION: "v4.44.3"
   TF_IN_AUTOMATION: "true"
 
@@ -219,7 +221,6 @@ plan:
   resource_group: sdwan
   before_script:
     - *install_terraform
-    - *vault_login
   script:
     # No -backend-config flags: the TF_HTTP_* variables above already are
     # the backend configuration.
