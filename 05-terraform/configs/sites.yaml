@@ -1,0 +1,27 @@
+sdwan:
+  sites:
+    - id: 300
+      routers:
+        - chassis_id: "C8K-D4D8222C-26DA-83D1-EFA8-EAA6C881AFBF"
+          model: "C8000V"
+          device_template: "DT-BR-T2-C8000V-01"
+          device_variables:
+            site_id: 300
+            system_ip: "10.0.0.5"
+            system_hostname: "SD-BR02-C8KV-R1"
+            timezone: "UTC"
+            system_description: "Branch Router 1"
+            system_latitude: "37.7749"
+            system_longitude: "-122.4194"
+            system_location: "San Francisco"
+            ondemand_tunnel_enable: true
+            controller_groups: "1"
+        - chassis_id: "C8K-25679DF5-DE95-81BC-5D4A-56907294945B"
+          model: "C8000V"
+          device_template: "DT-BR-T2-C8000V-01"
+          device_variables:
+            site_id: 300
+            system_ip: "10.0.0.6"
+            system_hostname: "SD-BR02-C8KV-R2"
+            timezone: "UTC"
+            system_description: "Branch Router 2"

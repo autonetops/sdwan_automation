@@ -1,0 +1,18 @@
+sdwan:
+  policy_objects:
+    sla_class:
+      - name: "SLA-GOOGLE"
+        loss: 2
+        latency: 250
+    policer:
+      - name: "POLICER-GUEST"
+        burst: 100000
+        exceed_action: "remark"
+        rate: 100
+    application_list:
+      - name: "Google_Apps_New"
+        applications:
+          - "android-updates"
+          - "chrome_update"
+          - "youtube"
+          - "youtube_hd"

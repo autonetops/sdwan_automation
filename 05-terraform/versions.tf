@@ -19,7 +19,7 @@ terraform {
   required_providers {
     sdwan = {
       source  = "CiscoDevNet/sdwan"
-      version = "~> 0.11"
+      version = "~> 0.11.4"
     }
     vault = {
       source  = "hashicorp/vault"
