@@ -13,7 +13,7 @@
 
 locals {
   # TASK 1.1: this is the wrong decoder, and `terraform plan` will tell you
-  #           so in its first ten lines. Fix the one word.
+  #           so in its first ten lines. Fix the one word: use `yamldecode` instead of `jsondecode`.
   #
   #           Not a trick question — but worth noticing that Terraform ships
   #           decoders for YAML, JSON, CSV and base64, which is why "we need
@@ -24,7 +24,7 @@ locals {
   #           offline, with no credentials and no fabric.
   #           jsondecode(), file(), path.module, are all built-in functions needed
   ## TASK read the data model from a YAML file, and to resolve the path correctly.
-  file = 
+  file = yamldecode(file("${path.module}/../data/fabric.yaml"))
 
   sdwan = local.file.sdwan
 

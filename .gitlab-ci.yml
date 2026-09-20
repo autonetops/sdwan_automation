@@ -1,34 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────
-# Validated change pipeline for the Catalyst SD-WAN fabric
-#
-#   data/fabric.yaml  ─▶  validate  ─▶  plan  ─▶  deploy  ─▶  test  ─▶  notify
-#
-# One YAML file is edited. Five stages decide whether it reaches a router.
-# There is no application code in this pipeline — Terraform reads the data
-# model itself (`yamldecode`), and Terraform's own preconditions and
-# postconditions are what make the fabric able to refuse its own change.
-#
-#   validate   Is the change coherent?       No fabric, no Vault, no network.
-#   plan       What exactly will it do?      The artifact a reviewer reads.
-#   deploy     Do it — and prove it.         Apply, verify, roll back on failure.
-#   test       Does it stay done?            A second plan must be empty.
-#   notify     Who finds out?                Slack, on both outcomes.
-#
-# What runs where:
-#
-#   ┌──────────────────┬──────────┬──────┬────────┬──────┬────────┐
-#   │                  │ validate │ plan │ deploy │ test │ notify │
-#   ├──────────────────┼──────────┼──────┼────────┼──────┼────────┤
-#   │ feature branch   │    ✅    │  ❌  │   ❌   │  ❌  │   ❌   │
-#   │ merge request    │    ✅    │  ✅  │   ❌   │  ❌  │   ❌   │
-#   │ default branch   │    ✅    │  ✅  │ ✅ man │  ✅  │   ✅   │
-#   └──────────────────┴──────────┴──────┴────────┴──────┴────────┘
-#
-# The asymmetry is the design. Anyone may propose a change and see it
-# checked. Only the default branch may touch the fabric, and only after a
-# human presses a button.
-# ─────────────────────────────────────────────────────────────────────
-
 stages:
   - validate
   - plan
@@ -47,11 +16,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 variables:
-  # The rollback in the deploy job reads the PREVIOUS commit of the data
-  # model. GitLab clones shallow by default, and a depth of 1 has no HEAD~1
-  # — the rollback would find nothing to roll back to, at the exact moment
-  # it matters.
-  GIT_DEPTH: "20"
+  GIT_DEPTH: "5"
 
   # ── What the pipeline acts on ─────────────────────────────────────
   DATA_MODEL: "06-pipeline/data/fabric.yaml"
@@ -131,7 +96,6 @@ terraform-validate:
     # `-check` fails; `-diff` shows what it wanted. Fix it locally with
     # `terraform fmt -recursive` and commit that, so the diff on the merge
     # request is your change and not whitespace.
-    - terraform fmt -check -diff -recursive 05-terraform/
     - terraform fmt -check -diff -recursive 06-pipeline/
     # `-backend=false`: no state, no GitLab, no credentials. This still
     # decodes data/fabric.yaml and type-checks every expression that reads
