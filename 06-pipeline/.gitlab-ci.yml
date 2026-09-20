@@ -83,6 +83,7 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
+# https://docs.gitlab.com/ci/variables/predefined_variables/
 variables:
   # The rollback in the deploy job reads the PREVIOUS commit of the data
   # model. GitLab clones shallow by default, and a depth of 1 has no HEAD~1
@@ -99,12 +100,10 @@ variables:
   # pipeline against it — that is the moment the two halves of this module
   # become one thing:
   #
-  #   TF_DIR: "06-pipeline/terraform"
-  TF_DIR: "06-pipeline/solution/terraform"
+  TF_DIR: "06-pipeline/terraform"
 
   # ── Vault ─────────────────────────────────────────────────────────
   # Addresses, not secrets — the login is the CI/CD variable.
-  VAULT_ADDR: "https://vault.autonetops.com"
   TF_VAR_vault_address: "${VAULT_ADDR}"
   TF_VAR_vault_mount: "workshop"
   TF_VAR_vault_secret_path: "sdwan"
@@ -133,9 +132,10 @@ variables:
   # Terraform root and creates its own config group. Two states that both
   # believe they own one object is a fight nobody wins.
   TF_STATE_NAME: "sdwan-pipeline"
-  TF_HTTP_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
-  TF_HTTP_LOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
-  TF_HTTP_UNLOCK_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+  TF_HTTP_ADDRESS: "${TF_STATE_API_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
+  #TF_HTTP_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}" # This is the correct form
+  TF_HTTP_LOCK_ADDRESS: "${TF_STATE_API_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+  TF_HTTP_UNLOCK_ADDRESS: "${TF_STATE_API_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
   # GitLab's state API expects these verbs; they are not the backend's
   # defaults, and getting them wrong produces a 404 at lock time that reads
   # like the state does not exist.
@@ -145,12 +145,9 @@ variables:
   TF_HTTP_USERNAME: "gitlab-ci-token"
   TF_HTTP_PASSWORD: "${CI_JOB_TOKEN}"
 
-  # TASK 0 - ADD A VARIABLE TO REFERENCE THE DEFAULT IMAGE USED IN THE PIPELINE. This is the image that will be used for jobs that do not specify a different image.
-  
 
 default:
-  # TASK 0.1 - Use the variable you just created to set the default image for the pipeline. This will ensure that all jobs use this image unless they specify a different one.
-  image: 
+  # TASK 0.1 - set default image for the pipeline (alpine:3.20)
   tags:
     - docker
 
@@ -168,29 +165,6 @@ default:
     "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
   - unzip -o -q /tmp/tf.zip -d /usr/local/bin
   - terraform version
-
-# Log in to Vault once, up front, and exchange the userpass login for a
-# token — the Terraform vault provider speaks tokens, not userpass.
-#
-# Doing it up front means a bad credential fails in five seconds with a clear
-# message, instead of thirty lines into a terraform plan.
-.vault_login: &vault_login
-  - |
-    if [ -z "${VAULT_USERNAME:-}" ] || [ -z "${VAULT_PASSWORD:-}" ]; then
-      echo "VAULT_USERNAME / VAULT_PASSWORD are not set. Add them as" >&2
-      echo "protected CI/CD variables (the password masked as well)." >&2
-      exit 1
-    fi
-    VAULT_TOKEN="$(curl -sS --fail --request POST \
-      --data "{\"password\":\"${VAULT_PASSWORD}\"}" \
-      "${VAULT_ADDR}/v1/auth/userpass/login/${VAULT_USERNAME}" \
-      | jq -r '.auth.client_token')"
-    if [ -z "${VAULT_TOKEN}" ] || [ "${VAULT_TOKEN}" = "null" ]; then
-      echo "Vault rejected the CI login for ${VAULT_USERNAME}." >&2
-      exit 1
-    fi
-    export VAULT_TOKEN
-    echo "Authenticated to ${VAULT_ADDR} as ${VAULT_USERNAME}."
 
 # ─────────────────────────────────────────────────────────────────────
 # STAGE 1 — validate
@@ -282,7 +256,6 @@ plan:
   resource_group: sdwan
   before_script:
     - *install_terraform
-    - *vault_login
   script:
     # No -backend-config flags: the TF_HTTP_* variables above already are
     # the backend configuration.
@@ -353,7 +326,6 @@ deploy:
     name: fabric-lab
   before_script:
     - *install_terraform
-    - *vault_login
   script:
     # Same backend, same state as the plan job — which is the entire reason
     # the state moved to GitLab.
@@ -471,7 +443,6 @@ test-idempotency:
   resource_group: sdwan
   before_script:
     - *install_terraform
-    - *vault_login
   script:
     - terraform -chdir="${TF_DIR}" init -input=false
     # ── TASK 5 ──────────────────────────────────────────────────────

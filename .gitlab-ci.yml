@@ -57,7 +57,7 @@ variables:
   DATA_MODEL: "06-pipeline/data/fabric.yaml"
   # The solution directory: 06-pipeline/terraform ships the planted TASKs
   # for students to solve, so CI against it would fail forever by design.
-  TF_DIR: "06-pipeline/solution/terraform"
+  TF_DIR: "06-pipeline/terraform"
 
   # ── Vault ─────────────────────────────────────────────────────────
   # Addresses, not secrets — the login is the CI/CD variable.
@@ -69,25 +69,6 @@ variables:
   YQ_VERSION: "v4.44.3"
   TF_IN_AUTOMATION: "true"
 
-  # Note what is NOT here: any TF_VAR_* describing the change. No student
-  # number, no banner, no config group name. Those live in the data model,
-  # where a reviewer reads them — and a value that can arrive from two
-  # places is a value nobody can review.
-
-  # ── Terraform state, served by GitLab ─────────────────────────────
-  # Module 5 PART C. versions.tf declares `backend "http" {}` and nothing
-  # else; every argument arrives here as TF_HTTP_*, which is what makes one
-  # configuration usable from a laptop and from a pipeline at the same time.
-  #
-  # Why this matters more in CI than anywhere else: `plan`, `deploy` and
-  # `test` below are three jobs in three containers. With state as a local
-  # file, deploy would start from an empty state on every run and try to
-  # create a config group that already exists. Shared state is not a nicety
-  # here, it is the thing that makes the pipeline correct.
-  #
-  # A DIFFERENT state from module 5's, deliberately: module 6 has its own
-  # Terraform root and creates its own config group. Two states that both
-  # believe they own one object is a fight nobody wins.
   TF_STATE_NAME: "sdwan-pipeline"
   TF_HTTP_ADDRESS: "${TF_STATE_API_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
   #TF_HTTP_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}" # This is the correct form
@@ -121,29 +102,6 @@ default:
     "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
   - unzip -o -q /tmp/tf.zip -d /usr/local/bin
   - terraform version
-
-# Log in to Vault once, up front, and exchange the userpass login for a
-# token — the Terraform vault provider speaks tokens, not userpass.
-#
-# Doing it up front means a bad credential fails in five seconds with a clear
-# message, instead of thirty lines into a terraform plan.
-.vault_login: &vault_login
-  - |
-    if [ -z "${VAULT_USERNAME:-}" ] || [ -z "${VAULT_PASSWORD:-}" ]; then
-      echo "VAULT_USERNAME / VAULT_PASSWORD are not set. Add them as" >&2
-      echo "protected CI/CD variables (the password masked as well)." >&2
-      exit 1
-    fi
-    VAULT_TOKEN="$(curl -sS --fail --request POST \
-      --data "{\"password\":\"${VAULT_PASSWORD}\"}" \
-      "${VAULT_ADDR}/v1/auth/userpass/login/${VAULT_USERNAME}" \
-      | jq -r '.auth.client_token')"
-    if [ -z "${VAULT_TOKEN}" ] || [ "${VAULT_TOKEN}" = "null" ]; then
-      echo "Vault rejected the CI login for ${VAULT_USERNAME}." >&2
-      exit 1
-    fi
-    export VAULT_TOKEN
-    echo "Authenticated to ${VAULT_ADDR} as ${VAULT_USERNAME}."
 
 # ─────────────────────────────────────────────────────────────────────
 # STAGE 1 — validate
@@ -269,7 +227,6 @@ deploy:
     name: fabric-lab
   before_script:
     - *install_terraform
-    - *vault_login
   script:
     # Same backend, same state as the plan job — which is the entire reason
     # the state moved to GitLab.
@@ -363,7 +320,6 @@ test-idempotency:
   resource_group: sdwan
   before_script:
     - *install_terraform
-    - *vault_login
   script:
     - terraform -chdir="${TF_DIR}" init -input=false
     # -detailed-exitcode is the whole job: 0 = nothing to do, 2 = there is a
