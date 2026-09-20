@@ -12,18 +12,6 @@
 # gives it to the machine.
 # ─────────────────────────────────────────────────────────────────────
 
-locals {
-  prefix = var.student
-  # READ THE YAML FILES IN CONFIGS/*.YAML
-  policy_file = yamldecode(file("${path.module}/configs/policy.yaml"))
-
-  application_list = {
-    for app in local.policy_file.sdwan.policy_objects.application_list : app.name => app
-  }
-
-}
-
-
 # System feature profile to hold the banner parcel.
 resource "sdwan_system_feature_profile" "this" {
   name        = "${local.prefix}-system-profile"
