@@ -22,9 +22,11 @@ locals {
   #           `terraform console` is the fastest way to try a decoder without
   #           running a plan — and `terraform validate` catches this one
   #           offline, with no credentials and no fabric.
-  model = jsondecode(file("${path.module}/../data/fabric.yaml"))
+  #           jsondecode(), file(), path.module, are all built-in functions needed
+  ## TASK read the data model from a YAML file, and to resolve the path correctly.
+  file = 
 
-  sdwan = local.model.sdwan
+  sdwan = local.file.sdwan
 
   # `path.module` and not a bare relative path, above. `file("../data/…")`
   # resolves against the process's working directory — the directory you
