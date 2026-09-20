@@ -291,7 +291,7 @@ is `when: manual` behind the `fabric-lab` environment. Press it.
 
 ## The decisions these ask for
 
-Several TASKs and TASKs don't have one right answer. They have a
+Several TASKs do not have one right answer. They have a
 **justification** — write yours down, in the MR description or here.
 
 ### TASK 4 — `allow_failure: false` is redundant. Why write it?
