@@ -24,8 +24,6 @@ variables:
   # for students to solve, so CI against it would fail forever by design.
   TF_DIR: "06-pipeline/terraform"
 
-  # ── Vault ─────────────────────────────────────────────────────────
-  # Addresses, not secrets — the login is the CI/CD variable.
   TF_VAR_vault_address: "${VAULT_ADDR}"
   TF_VAR_vault_mount: "workshop"
   TF_VAR_vault_secret_path: "sdwan"
@@ -53,8 +51,6 @@ default:
   tags:
     - docker
 
-# ── reusable fragments ──────────────────────────────────────────────
-
 .tools: &tools
   - apk add --no-cache curl jq git bash >/dev/null
   - curl -sSL -o /usr/local/bin/yq
@@ -70,20 +66,12 @@ default:
 
 # ─────────────────────────────────────────────────────────────────────
 # STAGE 1 — validate
-#
-# The cheapest stage and the one that saves the most time. Nothing in it
-# touches Vault, the Manager or the network beyond downloading its own
-# tools. That is the point: the gate has to keep working on the day the
-# thing it is gating is down.
 # ─────────────────────────────────────────────────────────────────────
 
 data-model-validate:
   stage: validate
   before_script:
     - *tools
-  # The MEANING of the change: placeholders, naming, empty targets. The
-  # SHAPE of it is terraform-validate's job, below — re-implementing the
-  # schema here would be a second source of truth about it.
   script:
     - ./06-pipeline/validate-data-model.sh "${DATA_MODEL}"
 
@@ -92,15 +80,7 @@ terraform-validate:
   before_script:
     - *install_terraform
   script:
-    # A real gate, not a formatter that quietly rewrites your files.
-    # `-check` fails; `-diff` shows what it wanted. Fix it locally with
-    # `terraform fmt -recursive` and commit that, so the diff on the merge
-    # request is your change and not whitespace.
     - terraform fmt -check -diff -recursive 06-pipeline/
-    # `-backend=false`: no state, no GitLab, no credentials. This still
-    # decodes data/fabric.yaml and type-checks every expression that reads
-    # it, which is how a typo in the data model fails here in seconds
-    # rather than in the plan job against a live Manager.
     - terraform -chdir="${TF_DIR}" init -backend=false -input=false
     - terraform -chdir="${TF_DIR}" validate
 
@@ -118,19 +98,6 @@ offline-tests:
     reports:
       junit: report.xml
     expire_in: 1 week
-
-# ─────────────────────────────────────────────────────────────────────
-# STAGE 2 — plan
-#
-# Asks Terraform what it would do. Runs on merge requests, because the
-# answer to "what exactly is going to change?" belongs in the review, not
-# after it.
-#
-# Note that the preconditions in terraform/main.tf are evaluated HERE, at
-# plan time: `data.sdwan_device.before` has no depends_on, so Terraform
-# reads the fabric during plan. A change that targets an unreachable device
-# is refused on the merge request, before anyone presses deploy.
-# ─────────────────────────────────────────────────────────────────────
 
 plan:
   stage: plan
@@ -260,23 +227,6 @@ deploy:
       when: manual
       allow_failure: false
 
-# ─────────────────────────────────────────────────────────────────────
-# STAGE 4 — test
-#
-# Deploy proved the FABRIC survived. This proves the CONFIGURATION is
-# settled: run the plan again and it must come back empty.
-#
-# A second plan that still wants to change something means one of three
-# things, and all three are worth failing a pipeline over:
-#
-#   • a resource is not idempotent — it rewrites itself on every apply, so
-#     every future pipeline shows a change that is not a change;
-#   • the Manager normalised a value you sent (trailing whitespace, a case
-#     change), so the data model and the fabric disagree, permanently;
-#   • somebody is editing the fabric in the GUI while the pipeline runs.
-#
-# This is the cheapest test in the pipeline and the one people skip.
-# ─────────────────────────────────────────────────────────────────────
 
 test-idempotency:
   stage: test
@@ -311,24 +261,6 @@ test-idempotency:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# ─────────────────────────────────────────────────────────────────────
-# STAGE 5 — notify
-#
-# A deploy that succeeded and told nobody is fine. A deploy that FAILED and
-# told nobody is an outage with a delay fuse on it.
-#
-# Requires one protected, masked CI/CD variable:
-#
-#     SLACK_WEBHOOK_URL   an incoming-webhook URL for your channel
-#
-# ⚠️ NOT SET YET — add it under Settings → CI/CD → Variables. Both jobs are
-#    skipped entirely while it is missing. A pipeline that fails because
-#    Slack is down is a pipeline that taught everyone to ignore it.
-#
-# The message is built with `jq -n --arg`, not by pasting strings into a
-# shell heredoc. A commit title containing a quote would break the latter
-# on the day you least want a broken notifier.
-# ─────────────────────────────────────────────────────────────────────
 
 .slack: &slack
   - apk add --no-cache curl jq >/dev/null
