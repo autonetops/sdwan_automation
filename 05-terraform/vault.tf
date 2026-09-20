@@ -33,8 +33,8 @@ ephemeral "vault_kv_secret_v2" "this" {
 # ── Which credentials win ───────────────────────────────────────────
 locals {
   # `one()` turns a zero-or-one list into null-or-the-value. It is the
-  # idiomatic companion to `use_vault` on a conditional data source, and it is
-  # why the PART A path never touches Vault: at use_vault = 0 the provider is
+  # idiomatic companion to `count` on a conditional data source, and it is
+  # why the PART A path never touches Vault: at count = 0 the provider is
   # not even configured, so no token is required to run PART A.
   vault_manager = one(ephemeral.vault_kv_secret_v2.this[*].data)
 

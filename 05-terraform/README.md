@@ -6,8 +6,8 @@ other than you can read.
 
 | | | |
 |---|---|---|
-| **PART A** | credentials out of Vault | `vault.tf` — TASK 1 |
-| **PART B** | the change itself | `main.tf` — TASK 2, 3, 4 |
+| **PART A** | the change itself | `locals.tf` — TASK 1 · `main.tf` — TASK 2, 3 |
+| **PART B** | credentials out of Vault | `vault.tf` — TASK 4 |
 | **PART C** | state in GitLab | `backend.tf` — TASK 5 |
 
 PART A is the 10 minutes. PART B 45 and PART C ~15 minutes each
@@ -44,13 +44,22 @@ someone who understands what it's hiding**
 cp terraform.tfvars.example terraform.tfvars    # set your "student" number
 
 terraform init
-terraform plan      # ← this will fail. On purpose.
 ```
 
-### TASK 2.1 — the planted error
+| Task | File | What |
+|---|---|---|
+| **1** | `locals.tf` | Read `configs/policy_objects.yaml` in. Nothing else parses until you do |
+| **2** | `main.tf` | One config group becomes a list in `terraform.tfvars`, driven by a `for` |
+| **3** | `main.tf` | Uncomment the policer and give `for_each` its map |
 
-The `plan` will complain about a non-existent attribute on
-`sdwan_system_banner_feature`. **Don't google it.** Ask the provider itself:
+```bash
+terraform plan
+```
+
+### When the provider disagrees with you
+
+Names moved between the 0.x releases of this provider (`..._profile_parcel`
+became `..._feature`). Don't google them — ask the provider:
 
 ```bash
 terraform providers schema -json \
@@ -59,9 +68,7 @@ terraform providers schema -json \
         | .sdwan_system_banner_feature.block.attributes | keys'
 ```
 
-Reading a provider's schema is the skill. Memorising attribute names is not —
-these names moved between the 0.x releases of this provider, and they'll move
-again.
+Reading a provider's schema is the skill. Memorising attribute names is not.
 
 ## The uncomfortable discovery
 
@@ -105,30 +112,17 @@ Terraform can go get it itself.
 echo 'credentials_from_vault = true' >> terraform.tfvars
 
 terraform init      # the lock file has never seen the vault provider
-terraform plan      # ← this will fail too. Also on purpose.
 ```
 
-### TASK 4.1 — the KV v1/v2 trap
+### TASK 4 — make the Vault read optional
 
-The shipped data source is `vault_kv_secret`, which reads a **KV v1** mount.
-The bootcamp's `secret/` is **KV v2**. They are different APIs wearing the
-same-looking path: v2 keeps data at `<mount>/data/<path>` and metadata at
-`<mount>/metadata/<path>`, and the v2 data source therefore takes the mount
-and the path **separately** rather than one concatenated string.
-
-Read the error first. Then find the right data source the same way you found
-the banner attribute:
+The read in `vault.tf` is unconditional, so PART A now needs a Vault token it
+never needed before. Add `count` to the data source — the `one()` below it
+already expects a zero-or-one list.
 
 ```bash
-terraform providers schema -json \
-  | jq '.provider_schemas
-        | .["registry.terraform.io/hashicorp/vault"].data_source_schemas
-        | keys'
+terraform plan
 ```
-
-Two things change when you fix it: the data source **type**, and the address
-it's referenced by in `local.vault_manager` — a resource's address is its type
-plus its name, so changing the type moves every reference to it.
 
 ### Prove it worked
 
