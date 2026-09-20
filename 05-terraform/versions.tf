@@ -1,18 +1,3 @@
-# Cisco's official provider for Catalyst SD-WAN, plus HashiCorp's Vault
-# provider (PART B) — the one that lets Terraform fetch its own credentials
-# instead of trusting whatever the shell exported.
-#
-# ⚠️ VERSION PINNING: resource names moved around a lot across the 0.x
-#    releases of the sdwan provider (`..._profile_parcel` became `..._feature`
-#    in some releases). Pin the version, and when something doesn't exist,
-#    read the real schema instead of guessing:
-#
-#        terraform providers schema -json | jq '.provider_schemas
-#          | .["registry.terraform.io/ciscodevnet/sdwan"].resource_schemas
-#          | keys'
-#
-#    Reading a provider's schema is an automation skill, not a workaround.
-
 terraform {
   required_version = ">= 1.6"
 
@@ -27,7 +12,6 @@ terraform {
     }
   }
 
-  # State lives on disk for PART A and PART B. PART C moves it to GitLab —
-  # see backend.tf.
+  # State lives on disk here. Module 6 moves it to GitLab.
 }
 

@@ -2,12 +2,11 @@
 # Module 5 — the same change as module 4, now declarative
 #
 #
-# The module runs in three parts. This file is PART A:
+# The module runs in two parts. This file is PART A:
 #
 #   PART A  the change itself          locals.tf    TASK 1
 #                                      main.tf      TASK 2, 3
 #   PART B  credentials out of Vault   vault.tf     TASK 4
-#   PART C  state in GitLab            backend.tf   TASK 5
 #
 # Do them in order. Each one takes something you were holding by hand and
 # gives it to the machine.
@@ -75,4 +74,4 @@ resource "sdwan_application_list_policy_object" "this" {
 #  rate          = each.value.rate
 #}
 
-# ── TASK 4 is in vault.tf, TASK 5 in backend.tf ─────────────────────
+# ── TASK 4 is in vault.tf ───────────────────────────────────────────

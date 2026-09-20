@@ -1,40 +1,19 @@
-# Module 5 — Terraform, properly (45 min + extensions)
+# Module 5 — Terraform, properly (~55 min)
 
-The same change as module 4, now declarative — and then two things the
-module 4 script never had: credentials it fetches itself, and state someone
-other than you can read.
+The same change as module 4, now declarative — plus two things the module 4
+script never had: credentials it fetches itself, and state someone else can
+read.
 
-| | | |
-|---|---|---|
-| **PART A** | the change itself | `locals.tf` — TASK 1 · `main.tf` — TASK 2, 3 |
-| **PART B** | credentials out of Vault | `vault.tf` — TASK 4 |
-| **PART C** | state in GitLab | `backend.tf` — TASK 5 |
+| | | | |
+|---|---|---|---|
+| **PART A** | the change itself | `locals.tf`, `main.tf` | TASK 1, 2, 3 · 10 min |
+| **PART B** | credentials out of Vault | `vault.tf` | TASK 4 · 45 min |
 
-PART A is the 10 minutes. PART B 45 and PART C ~15 minutes each
-
-## The point of this lesson
-
-It isn't that Terraform beats Python. It's that **Terraform is only usable by
-someone who understands what it's hiding**
-
-| Module 4 (imperative) | Module 5 (declarative) |
-|---|---|
-| You write the **how** | You write the **what** |
-| You do the polling | The provider does |
-| You handle the failure | The provider does |
-| Do you know the state? No | The `state` does |
-| Works against any endpoint | Only what the provider covers |
-
-## What we're learning
-
-| Automation | SD-WAN |
-|---|---|
-| Declarative vs. imperative | Config group as code |
-| State and drift detection | Who touched the GUI after you |
-| `plan` as change review | The diff before the push |
-| Reading a provider's schema | Resource names that move between versions |
-| Secrets fetched, not exported | One token instead of three credentials |
-| Remote state, locking, review | Two engineers, one fabric |
+The point isn't that Terraform beats Python. It's that **Terraform is only
+usable by someone who understands what it's hiding**: you write the *what*,
+the provider does the polling and the error handling, and the state file —
+not you — knows what's out there. The cost is that you only get what the
+provider covers.
 
 ---
 
@@ -42,7 +21,6 @@ someone who understands what it's hiding**
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars    # set your "student" number
-
 terraform init
 ```
 
@@ -54,12 +32,12 @@ terraform init
 
 ```bash
 terraform plan
+terraform apply
 ```
 
-### When the provider disagrees with you
-
-Names moved between the 0.x releases of this provider (`..._profile_parcel`
-became `..._feature`). Don't google them — ask the provider:
+**When a name doesn't exist**, don't google it — resource and attribute names
+moved between the 0.x releases of this provider (`..._profile_parcel` became
+`..._feature`). Ask the provider:
 
 ```bash
 terraform providers schema -json \
@@ -68,202 +46,92 @@ terraform providers schema -json \
         | .sdwan_system_banner_feature.block.attributes | keys'
 ```
 
-Reading a provider's schema is the skill. Memorising attribute names is not.
+**Drift.** Change the banner by hand in the GUI, then `terraform plan` again.
+It finds it — the module 4 script never could.
 
-## The uncomfortable discovery
-
-Look at the `locals` block in `main.tf`. The `sdwan_device` data source exposes
-`device_id`, `hostname`, `reachability`, `serial_number`, `site_id`, `state`,
-`status` and `uuid` — **and nothing else**. There is no `personality`.
-
-Meaning: through Terraform you cannot tell an edge from a controller, something
-`/dataservice/device` gives you for free.
-
-That's why the Python toolkit doesn't become junk once you adopt Terraform. The
-provider covers the declarative path; the API covers the rest. **A good tool is
-one you know when not to use.**
-
-## Drift
-
-After the `apply`, go to the GUI and change the banner by hand. Come back and
-run:
-
-```bash
-terraform plan
-```
-
-It finds it. That's the superpower the module 4 script didn't have: Terraform
-knows what the state *should* be, so it notices when someone else moved it.
+**The limit.** The `sdwan_device` data source exposes `hostname`,
+`reachability`, `site_id`, `uuid` and little else. No `personality`, so
+through Terraform you can't tell an edge from a controller — something
+`/dataservice/device` gives you for free. The provider covers the declarative
+path; the API covers the rest.
 
 ---
 
-# PART B — stop exporting secrets (TASK 4)
+# PART B — stop exporting secrets
 
-Look at what you just did. `source ../scripts/vault-env.sh` put a Manager
-password into your shell's environment, where it is now inherited by every
-process you launch from that terminal, readable in `/proc`, and one `env`
-away from a screenshare. And the pipeline can only work if a human remembers
-to run the script.
-
-Terraform can go get it itself.
+`source ../scripts/vault-env.sh` puts the Manager password in your shell,
+where every process you launch inherits it and one `env` exposes it on a
+screenshare. And the pipeline only works if a human remembers to run it.
+Terraform can fetch it itself.
 
 ```bash
-# vault.tf already declares the provider. Point the config at it:
 echo 'credentials_from_vault = true' >> terraform.tfvars
-
 terraform init      # the lock file has never seen the vault provider
 ```
 
-### TASK 4 — make the Vault read optional
+**TASK 4** — the read in `vault.tf` is unconditional, so PART A would now need
+a Vault token it never needed before. Add `count` to the data source; the
+`one()` below it already expects a zero-or-one list.
 
-The read in `vault.tf` is unconditional, so PART A now needs a Vault token it
-never needed before. Add `count` to the data source — the `one()` below it
-already expects a zero-or-one list.
-
-```bash
-terraform plan
-```
-
-### Prove it worked
+Prove it, with the credentials deliberately gone from the environment:
 
 ```bash
 env -u TF_VAR_vmanage_url -u TF_VAR_vmanage_username -u TF_VAR_vmanage_password \
   terraform plan
 ```
 
-Same plan, with the credentials deliberately removed from the environment.
-The only secret left in your shell is `VAULT_TOKEN` — which `vault-env.sh`
-mints for you from the userpass login you got in module 1, and which expires
-on its own. Terraform's Vault provider speaks tokens, not userpass; that
-exchange is the whole reason the script still exists.
+The only secret left in your shell is `VAULT_TOKEN`, which expires on its own.
+Two details in `vault.tf` worth stealing:
 
-### Two things worth stealing from `vault.tf`
+- **`skip_child_token = true`** — by default the provider mints a child token,
+  which needs `auth/token/create`. A read-only token doesn't have it, and the
+  403 explains nothing.
+- **`count` on the data source** — at `count = 0` the provider is never
+  configured, so PART A runs with no Vault token at all.
 
-- **`skip_child_token = true`.** By default the provider spends your token to
-  mint a short-lived child token, which needs the `auth/token/create`
-  capability. A genuinely read-only token doesn't have it, and the failure is
-  a 403 that explains nothing.
-- **`count` on the data source.** At `count = 0` Terraform doesn't just skip
-  the read — it never configures the provider, so PART A keeps working with
-  no Vault token at all. That's what makes the fallback a real fallback.
+> **Is the toggle good practice?** No — in production you delete the branch
+> you don't use. It's here so the class survives Vault being down.
 
-### What PART B just cost you
+---
+
+# What's still missing
+
+Two things, and both are module 6's.
 
 ```bash
-jq '.resources[]
-    | select(.type == "vault_kv_secret_v2")
+jq '.resources[] | select(.type == "vault_kv_secret_v2")
     | .instances[0].attributes.data' terraform.tfstate
 ```
 
-There it is: the Manager password, cleartext, in a file on your laptop.
-Terraform persists **every data source it reads**, and the same applies to any
-saved plan (`terraform plan -out=tfplan`). The Vault provider's own
-documentation says so in its first paragraph. Marking an attribute
-`sensitive` only redacts it from *output* — `terraform show` prints
-`(sensitive value)` while the bytes on disk stay in the clear.
+There's the Manager password, cleartext, on your laptop. Terraform persists
+**every data source it reads** — into the state and into any saved plan.
+`sensitive` redacts output, not bytes on disk.
 
-That isn't an argument against PART B. It's the argument for PART C: a secret
-Terraform is going to write down anyway belongs somewhere with access control,
-versioning and an audit trail — not in `~/`. It's also why `.gitlab-ci.yml`
-publishes the human-readable plan as its review artifact and never the binary
-one: job artifacts are downloadable by every Reporter on the project.
-
-> **Is the toggle good practice?** No. In production you delete the branch you
-> don't use. It's here so the class survives Vault being down, and so you can
-> see both paths side by side — but two ways to do one thing is two ways to be
-> wrong, and the GitHub workflow in this repo is already the exception that
-> proves it.
-
----
-
-# PART C — the state stops being yours (TASK 5)
-
-`terraform.tfstate` is currently a file in this directory. PART B already
-showed you the first reason that's a problem — since Terraform reads the
-secret, the state file *is* a credential file, which is why it's in
-`.gitignore` and why it doesn't belong on a laptop.
-
-There are four more:
+`terraform.tfstate` being a local file costs you more than that:
 
 | Local state | What it costs you |
 |---|---|
+| Contains your credentials | See above. It's a credential file, hence `.gitignore` |
 | One copy, one laptop | Nobody else can plan, so nobody else can review |
-| No backup | Lose it and Terraform forgets it owns the config group — the next apply tries to create it again and the fabric says the name is taken |
-| No lock | Two people applying at once isn't a merge conflict, it's two writers on one fabric |
-| Invisible to CI | `plan` and `apply` are separate containers. The apply job starts from an empty state **every run** |
+| No backup | Lose it and the next apply recreates the config group — the fabric says the name is taken |
+| No lock | Two people applying at once is two writers on one fabric |
+| Invisible to CI | `plan` and `apply` are separate containers; apply starts from an empty state **every run** |
 
-That last one is the one that matters today. Open `.gitlab-ci.yml` and note
-that `terraform-plan` and `apply-and-verify` are different jobs. Shared state
-isn't a nicety there — it's what makes the pipeline correct.
-
-GitLab serves Terraform state on every tier: the standard `http` backend with
-GitLab as the server.
-
-```bash
-# 1. Uncomment the backend block in backend.tf (TASK 5.1)
-
-# 2. Addresses go in a file...
-cp backend.hcl.example backend.hcl     # fill in PROJECT_ID and your state name
-
-# 3. ...secrets go in the environment.
-export TF_HTTP_USERNAME="<your gitlab username>"
-export TF_HTTP_PASSWORD="<personal access token, scope: api>"
-
-# 4. Move it. Terraform shows you what it's about to copy and asks for a yes.
-terraform init -migrate-state -backend-config=backend.hcl
-```
-
-Then prove the local file is inert:
-
-```bash
-terraform state list        # served from GitLab now
-mv terraform.tfstate /tmp/  # and plan again — still works
-terraform plan
-```
-
-Open **GitLab → Operate → Terraform states**. Your state is there, with a
-serial number that climbs on every apply and a lock you can watch being taken.
-
-### Why the backend block is empty
-
-A backend block can't reference variables — it's read before Terraform
-evaluates anything. So it stays empty (a *partial configuration*) and the
-values arrive at `init` time. That's not a workaround, it's the mechanism
-that lets one config serve many states: your laptop passes `backend.hcl`, and
-the pipeline passes `TF_HTTP_*` built from `$CI_PROJECT_ID` and
-`$CI_JOB_TOKEN` — a credential GitLab mints when the job starts and revokes
-when it ends. Nobody stores it. Nobody rotates it.
-
-### When a job dies mid-apply
-
-The lock stays held. GitLab shows it under Terraform states, and you clear it
-deliberately — after confirming nothing is still running:
-
-```bash
-terraform force-unlock <LOCK_ID>
-```
-
-"Deliberately" is the word. A lock you break while someone else is applying
-is exactly the failure the lock existed to prevent.
+That last one is why module 6 moves the state to GitLab before it builds the
+pipeline: with local state, the apply job starts from nothing every run, and
+that bug stays invisible until the day it duplicates everything you own.
 
 ---
 
-## Where this leaves you
+|  | module 4 | PART A | PART B | module 6 |
+|---|---|---|---|---|
+| change | imperative | declarative | declarative | declarative |
+| credentials | in your shell | in your shell | from Vault | from Vault |
+| state | none | your laptop | your laptop | GitLab, locked |
+| runs without you | no | no | no | **yes** |
 
-```
-                    PART A            PART B              PART C
-change              declarative       declarative         declarative
-credentials         in your shell     fetched from Vault  fetched from Vault
-state               on your laptop    on your laptop      in GitLab, locked
-runs without you    no                no                  yes
-```
+Only the last column can be handed to a pipeline. Module 6 is that pipeline.
 
-The third column is the only one you can hand to a pipeline, and module 6 is
-that pipeline.
-
-## What about the others?
-
-Ansible (`cisco.catalystwan`) and Sastre solve the same problem with different
-trade-offs — the first without state, the second specialised in
-backup/restore/migration. They were left out because of the four hours, not on
-merit. We chose depth in one over a tour of three.
+> Ansible (`cisco.catalystwan`) and Sastre solve the same problem with
+> different trade-offs — the first without state, the second specialised in
+> backup/restore/migration. Left out for time, not on merit.
