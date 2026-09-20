@@ -1,11 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────
-# PART A — the fabric config lives in YAML, not in HCL
-#
-# `configs/policy_objects.yaml` is the source of truth for the policy
-# objects. Terraform reads it at plan time, so adding a policer to the
-# fabric is a change to a YAML file — not to this code.
-# ─────────────────────────────────────────────────────────────────────
-
 locals {
   prefix = var.student
 

@@ -1,16 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────
-# Inputs
-#
-# Credentials show up here as variables — never as values. Where those
-# values come from changes once during this module:
-#
-#   PART A  the shell exports TF_VAR_vmanage_*   (source ../scripts/vault-env.sh)
-#   PART B  Terraform reads Vault itself         (TASK 4, var below)
-#
-# Part B is the one you want in a pipeline: the only secret anyone holds
-# is a Vault token, and Terraform fetches the rest at plan time.
-# ─────────────────────────────────────────────────────────────────────
-
 variable "credentials_from_vault" {
   description = <<-EOT
     false → Manager credentials arrive as TF_VAR_vmanage_* (PART A).
@@ -18,15 +5,9 @@ variable "credentials_from_vault" {
   EOT
   type        = bool
 
-  # The finished version defaults to the Vault path: the fallback is there
-  # for the environment that already fetched the secret some other way (the
-  # GitHub workflow does exactly that), not for daily use.
   default = true
 }
 
-# ── PART A credentials ──────────────────────────────────────────────
-# Optional on purpose: once credentials_from_vault = true, nothing sets
-# these and Terraform must not demand them.
 
 variable "vmanage_url" {
   description = "Manager URL. Comes from Vault via TF_VAR_vmanage_url. Unused when credentials_from_vault = true."
@@ -48,9 +29,6 @@ variable "vmanage_password" {
   sensitive   = true
 }
 
-# ── PART B: where the secret lives ──────────────────────────────────
-# These are addresses, not secrets — they belong in version control. The
-# token that opens them does not: it stays in VAULT_TOKEN.
 
 variable "vault_address" {
   description = "Vault address. VAULT_ADDR overrides it for the provider."
@@ -58,12 +36,6 @@ variable "vault_address" {
   default     = "https://vault.autonetops.com"
 }
 
-# Leave both null to authenticate with VAULT_TOKEN, which is what the lab
-# expects. Set them — TF_VAR_vault_username / TF_VAR_vault_password, or this
-# file — only if your Vault hands out a userpass login instead of a token.
-# A bare VAULT_USERNAME in the shell does NOT reach here: Terraform reads
-# TF_VAR_* and nothing else, and the provider's userpass block has no env
-# default of its own.
 
 variable "vault_username" {
   description = "Vault userpass username. Null → authenticate with VAULT_TOKEN."
@@ -95,7 +67,6 @@ variable "vault_secret_path" {
   default     = null
 }
 
-# ── The rest ────────────────────────────────────────────────────────
 
 variable "student" {
   description = "Your bootcamp number — becomes the prefix on everything you create."
