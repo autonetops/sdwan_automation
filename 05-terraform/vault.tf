@@ -36,7 +36,7 @@ locals {
   # idiomatic companion to `use_vault` on a conditional data source, and it is
   # why the PART A path never touches Vault: at use_vault = 0 the provider is
   # not even configured, so no token is required to run PART A.
-  vault_manager = one(data.vault_kv_secret_v2.this[*].data)
+  vault_manager = one(ephemeral.vault_kv_secret_v2.this[*].data)
 
   # variable = var.evaluated ? true_value : false_value
   manager = var.credentials_from_vault ? {
