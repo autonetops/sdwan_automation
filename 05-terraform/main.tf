@@ -59,8 +59,9 @@ resource "sdwan_application_list_policy_object" "this" {
   entries  = [for app in each.value.applications : { "application" : app }]
 }
 
+## TASK: LOOP THE POLICY OBJECTS AND CREATE POLICY OBJECTS
 resource "sdwan_policer_policy_object" "this" {
-  for_each      = { for policer in local.policy_file.sdwan.policy_objects.policer : policer.name => policer }
+  for_each = ....
   name          = each.value.name
   burst         = each.value.burst
   exceed_action = each.value.exceed_action
